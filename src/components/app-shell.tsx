@@ -12,6 +12,7 @@ import {
   Settings,
   ShieldCheck,
   UserRound,
+  Users,
   X,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,6 +59,9 @@ export function AppShell({
       : [
           { to: "/dashboard", label: "Dashboard", icon: Clock },
           { to: "/project", label: "Project", icon: FolderKanban },
+          ...(session.role === "admin"
+            ? [{ to: "/team", label: "Team", icon: Users }]
+            : []),
           { to: "/leave", label: "Leave", icon: CalendarDays },
           { to: "/settings", label: "Setting", icon: Settings },
         ];
@@ -68,7 +72,10 @@ export function AppShell({
       : [
           { to: "/dashboard", label: "My Shift", icon: Clock },
           ...(session.role === "admin"
-            ? [{ to: "/admin", label: "Admin Panel", icon: ShieldCheck }]
+            ? [
+                { to: "/team", label: "Team", icon: Users },
+                { to: "/admin", label: "Admin Panel", icon: ShieldCheck },
+              ]
             : []),
         ];
 

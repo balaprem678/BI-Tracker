@@ -11,4 +11,5 @@ export const WORK_STATUSES = [
 
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 
-export const LEAVE_TYPES = ["Casual", "Sick", "Paid", "Unpaid", "Work from home"] as const;
+export const LEAVE_TYPES =
+  ["Casual", "Sick", "Paid", "Unpaid", "Permission", "Work from home"] as const;

@@ -181,33 +181,26 @@ function AdminPanel() {
                 onChange={(v) => setForm({ ...form, department: v })}
               />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field
-                label="Hourly rate ($/hr)"
-                type="number"
-                value={form.hourlyRate}
-                onChange={(v) => setForm({ ...form, hourlyRate: v })}
-              />
-              <label className="block">
-                <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                  Access Role
-                </span>
-                <select
-                  value={form.role}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      role: e.target.value as "employee" | "admin" | "sub_admin",
-                    })
-                  }
-                  className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-                >
-                  <option value="employee">Employee</option>
-                  <option value="sub_admin">Sub Admin</option>
-                  <option value="admin">Administrator</option>
-                </select>
-              </label>
-            </div>
+            <label className="block">
+              <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                Access Role
+              </span>
+              <select
+                value={form.role}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    role: e.target.value as "employee" | "admin" | "sub_admin",
+                  })
+                }
+                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              >
+                <option value="employee">Employee</option>
+                <option value="sub_admin">Sub Admin</option>
+                <option value="admin">Administrator</option>
+              </select>
+            </label>
+
             <button
               type="submit"
               disabled={createMutation.isPending}
@@ -248,11 +241,18 @@ function AdminPanel() {
           >
             <div className="max-h-72 overflow-y-auto divide-y divide-border">
               {(employees ?? []).map((e) => (
-                <div key={e.id} className="flex items-center justify-between py-2.5 text-xs">
-                  <div className="min-w-0 pr-2">
+                <div key={e.id} className="flex items-center justify-between gap-2 py-2.5 text-xs">
+                  <div className="min-w-0 flex-1 pr-2">
                     <p className="font-medium text-foreground truncate">{e.full_name || e.email}</p>
                     <p className="text-muted-foreground truncate">{e.email || "No email"}</p>
                   </div>
+                  <Link
+                    to="/admin/employee/$id"
+                    params={{ id: e.id }}
+                    className="shrink-0 rounded-md border border-border px-2 py-1 text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
+                  >
+                    Profile
+                  </Link>
                   <button
                     onClick={() =>
                       activeMutation.mutate({ id: e.id, active: !e.is_active })

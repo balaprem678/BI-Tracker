@@ -1,16 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Lock, LayoutGrid, ShieldPlus } from "lucide-react";
+import { Lock, LayoutGrid, ShieldPlus, UserCheck, Shield, User, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   DEFAULT_ADMIN_EMAIL,
   DEFAULT_ADMIN_FULL_NAME,
   DEFAULT_ADMIN_PASSWORD,
   DEFAULT_ADMIN_USERNAME,
-  adminExists,
   createFirstAdmin,
   normalizeAdminIdentifier,
 } from "@/lib/bootstrap.functions";
@@ -41,11 +39,6 @@ function AuthPage() {
   const [mode, setMode] = useState<"signin" | "bootstrap">("signin");
 
   const bootstrapFn = useServerFn(createFirstAdmin);
-  const existsFn = useServerFn(adminExists);
-  const { data: adminState } = useQuery({
-    queryKey: ["admin-exists"],
-    queryFn: () => existsFn({}),
-  });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -53,53 +46,44 @@ function AuthPage() {
     });
   }, [navigate]);
 
-  async function handleSignIn(e: React.FormEvent) {
-    e.preventDefault();
+  async function performLogin(loginIdentifier: string, loginPass: string) {
     setBusy(true);
-
     try {
-      const normalizedIdentifier = normalizeAdminIdentifier(identifier);
-      const loginEmail = normalizedIdentifier || identifier;
-      const loginPassword = password || DEFAULT_ADMIN_PASSWORD;
+      const normalizedIdentifier = normalizeAdminIdentifier(loginIdentifier);
+      const loginEmail = normalizedIdentifier || loginIdentifier;
+      const finalPassword = loginPass || DEFAULT_ADMIN_PASSWORD;
 
-      if (normalizedIdentifier === DEFAULT_ADMIN_EMAIL) {
-        const adminStateNow = await existsFn({});
-        if (adminStateNow.exists === false) {
-          const res = await bootstrapFn({
-            data: {
-              email: DEFAULT_ADMIN_EMAIL,
-              password: DEFAULT_ADMIN_PASSWORD,
-              fullName: DEFAULT_ADMIN_FULL_NAME,
-            },
-          });
-          if (!res.ok) {
-            toast.error(res.message);
-            setBusy(false);
-            return;
-          }
-        }
-      }
-
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: loginEmail,
-        password: loginPassword,
+        password: finalPassword,
       });
 
-      if (error) {
-        toast.error(error.message);
+      if (error || !data.session) {
+        toast.error(error?.message || "Could not sign in.");
         return;
       }
 
-      navigate({
-        to: normalizedIdentifier === DEFAULT_ADMIN_EMAIL ? "/admin" : "/dashboard",
-        replace: true,
-      });
+      toast.success(`Signed in as ${data.user?.user_metadata?.full_name || loginEmail}`);
+
+      const userRole = (data.session as any)?.user?.role || (loginEmail === DEFAULT_ADMIN_EMAIL ? "admin" : "employee");
+      if (userRole === "admin") {
+        navigate({ to: "/admin", replace: true });
+      } else if (userRole === "sub_admin") {
+        navigate({ to: "/project", replace: true });
+      } else {
+        navigate({ to: "/dashboard", replace: true });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not sign in.";
       toast.error(message);
     } finally {
       setBusy(false);
     }
+  }
+
+  async function handleSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    await performLogin(identifier, password);
   }
 
   async function handleBootstrap(e: React.FormEvent) {
@@ -118,25 +102,69 @@ function AuthPage() {
     setBusy(false);
   }
 
-  const canBootstrap = adminState?.exists === false;
-
   return (
-    <div className="grid-backdrop flex min-h-screen items-center justify-center px-4">
+    <div className="grid-backdrop flex min-h-screen items-center justify-center px-4 py-8">
       <div className="panel w-full max-w-md p-8">
-        <div className="flex items-center gap-2">
-          <span className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground">
-            <LayoutGrid className="size-4" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground">
+              <LayoutGrid className="size-4" />
+            </span>
+            <span className="font-display text-lg font-semibold">BI Tracker</span>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Local Mode Active
           </span>
-          <span className="font-display text-lg font-semibold">BI Tracker</span>
         </div>
 
         {mode === "signin" ? (
           <>
             <h1 className="mt-6 text-2xl font-semibold">Sign in</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Use the credentials your administrator issued.
+              Sign in with an existing account or use 1-click test logins below.
             </p>
-            <form onSubmit={handleSignIn} className="mt-6 space-y-4">
+
+            {/* 1-Click Quick Logins */}
+            <div className="mt-5 rounded-lg border border-primary/20 bg-primary/5 p-3.5">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                <Sparkles className="size-3.5" /> 1-Click Demo Login
+              </p>
+              <div className="mt-2.5 grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => performLogin(DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD)}
+                  className="flex flex-col items-center justify-center rounded-md border border-border bg-background p-2 text-center transition-colors hover:border-primary hover:bg-secondary disabled:opacity-60"
+                >
+                  <Shield className="size-4 text-primary" />
+                  <span className="mt-1 text-xs font-semibold">Admin</span>
+                  <span className="text-[10px] text-muted-foreground">BI Admin</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => performLogin("subadmin@bi-tracker.local", DEFAULT_ADMIN_PASSWORD)}
+                  className="flex flex-col items-center justify-center rounded-md border border-border bg-background p-2 text-center transition-colors hover:border-primary hover:bg-secondary disabled:opacity-60"
+                >
+                  <UserCheck className="size-4 text-amber-500" />
+                  <span className="mt-1 text-xs font-semibold">Sub-Admin</span>
+                  <span className="text-[10px] text-muted-foreground">Sarah</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => performLogin("employee@bi-tracker.local", DEFAULT_ADMIN_PASSWORD)}
+                  className="flex flex-col items-center justify-center rounded-md border border-border bg-background p-2 text-center transition-colors hover:border-primary hover:bg-secondary disabled:opacity-60"
+                >
+                  <User className="size-4 text-blue-500" />
+                  <span className="mt-1 text-xs font-semibold">Employee</span>
+                  <span className="text-[10px] text-muted-foreground">Alex</span>
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleSignIn} className="mt-5 space-y-4">
               <Field
                 label="Username or work email"
                 value={identifier}
@@ -160,34 +188,30 @@ function AuthPage() {
             </form>
 
             <div className="mt-4 rounded-md border border-dashed border-border bg-secondary/30 p-3 text-xs text-muted-foreground">
-              <p className="font-medium text-foreground">Default admin access</p>
+              <p className="font-medium text-foreground">Default credentials</p>
               <p className="mt-1">
-                Username: {DEFAULT_ADMIN_USERNAME}
+                Admin: <code className="text-primary font-mono">{DEFAULT_ADMIN_USERNAME}</code> / Password: <code className="text-primary font-mono">{DEFAULT_ADMIN_PASSWORD}</code>
               </p>
-              <p>Password: {DEFAULT_ADMIN_PASSWORD}</p>
             </div>
 
-            <p className="mt-6 flex items-start gap-2 rounded-md border border-border bg-secondary/40 p-3 text-xs text-muted-foreground">
+            <p className="mt-4 flex items-start gap-2 rounded-md border border-border bg-secondary/40 p-3 text-xs text-muted-foreground">
               <Lock className="mt-0.5 size-3.5 shrink-0" />
-              Employees cannot sign up. Only an administrator can create accounts from the admin
-              panel.
+              All data is saved locally on your computer. You can create employees in the Admin panel.
             </p>
 
-            {canBootstrap && (
-              <button
-                onClick={() => setMode("bootstrap")}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-md border border-border py-2 text-sm text-primary transition-colors hover:bg-secondary"
-              >
-                <ShieldPlus className="size-4" />
-                Create the first administrator
-              </button>
-            )}
+            <button
+              onClick={() => setMode("bootstrap")}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-border py-2 text-sm text-primary transition-colors hover:bg-secondary"
+            >
+              <ShieldPlus className="size-4" />
+              Create another administrator
+            </button>
           </>
         ) : (
           <>
-            <h1 className="mt-6 text-2xl font-semibold">First administrator</h1>
+            <h1 className="mt-6 text-2xl font-semibold">New administrator</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              This is available only once, while no admin exists.
+              Add an additional administrator account to your local database.
             </p>
             <form onSubmit={handleBootstrap} className="mt-6 space-y-4">
               <Field label="Full name" value={fullName} onChange={setFullName} />
@@ -254,3 +278,4 @@ function Field({
     </label>
   );
 }
+

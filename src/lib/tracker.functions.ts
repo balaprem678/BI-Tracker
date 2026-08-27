@@ -27,8 +27,8 @@ export const getSessionInfo = createServerFn({ method: "GET" })
       supabase.from("user_roles").select("role").eq("user_id", userId),
     ]);
 
-    const isAdmin = (roles ?? []).some((r) => r.role === "admin");
-    const isSubAdmin = (roles ?? []).some((r) => r.role === "sub_admin");
+    const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
+    const isSubAdmin = (roles ?? []).some((r: any) => r.role === "sub_admin");
     return {
       userId,
       email: profile?.email ?? null,

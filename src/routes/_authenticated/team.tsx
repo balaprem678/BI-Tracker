@@ -44,13 +44,13 @@ import {
 export const Route = createFileRoute("/_authenticated/team")({
   head: () => ({
     meta: [
-      { title: "Team & Hourly Reports — BI Tracker" },
+      { title: "IT Team & Hourly Reports — BI Tracker" },
       {
         name: "description",
         content:
-          "Admin console for browsing team members, tracking live attendance status, reading hourly activity reports, and inspecting employee records.",
+          "Admin console for browsing IT team members, tracking live attendance status, reading hourly activity reports, and inspecting employee records.",
       },
-      { property: "og:title", content: "Team & Hourly Reports — BI Tracker" },
+      { property: "og:title", content: "IT Team & Hourly Reports — BI Tracker" },
     ],
   }),
   component: TeamPage,
@@ -130,18 +130,23 @@ function TeamPage() {
     },
   });
 
+  // IT Team members filter
+  const itTeamMembers = useMemo(() => {
+    return (team ?? []).filter((m) => (m.staffSection ?? "IT Team") === "IT Team");
+  }, [team]);
+
   // Departments list for filter
   const departments = useMemo(() => {
     const set = new Set<string>();
-    for (const m of team ?? []) {
+    for (const m of itTeamMembers) {
       if (m.department) set.add(m.department);
     }
     return Array.from(set).sort();
-  }, [team]);
+  }, [itTeamMembers]);
 
   // Filtered members
   const filteredTeam = useMemo(() => {
-    return (team ?? []).filter((m) => {
+    return itTeamMembers.filter((m) => {
       const q = search.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -163,26 +168,28 @@ function TeamPage() {
 
       return matchesSearch && matchesDept && matchesRole && matchesStatus;
     });
-  }, [team, search, departmentFilter, roleFilter, statusFilter]);
+  }, [itTeamMembers, search, departmentFilter, roleFilter, statusFilter]);
 
   // Filtered report rows
   const filteredReport = useMemo(() => {
-    return (report ?? []).filter((r) => {
-      const q = reportSearch.toLowerCase().trim();
-      if (!q) return true;
-      return (
-        r.name.toLowerCase().includes(q) ||
-        (r.department && r.department.toLowerCase().includes(q)) ||
-        (r.jobTitle && r.jobTitle.toLowerCase().includes(q)) ||
-        (r.email && r.email.toLowerCase().includes(q))
-      );
-    });
+    return (report ?? [])
+      .filter((r) => (r.staffSection ?? "IT Team") === "IT Team")
+      .filter((r) => {
+        const q = reportSearch.toLowerCase().trim();
+        if (!q) return true;
+        return (
+          r.name.toLowerCase().includes(q) ||
+          (r.department && r.department.toLowerCase().includes(q)) ||
+          (r.jobTitle && r.jobTitle.toLowerCase().includes(q)) ||
+          (r.email && r.email.toLowerCase().includes(q))
+        );
+      });
   }, [report, reportSearch]);
 
   if (!session) {
     return (
       <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">
-        Loading team console…
+        Loading IT team console…
       </div>
     );
   }
@@ -200,22 +207,22 @@ function TeamPage() {
     );
   }
 
-  const totalMembers = team?.length ?? 0;
-  const currentlyClockedIn = (team ?? []).filter((m) => m.isClockedIn).length;
-  const totalWorkedToday = (team ?? []).reduce((acc, m) => acc + m.todayHoursWorked, 0);
+  const totalMembers = itTeamMembers.length;
+  const currentlyClockedIn = itTeamMembers.filter((m) => m.isClockedIn).length;
+  const totalWorkedToday = itTeamMembers.reduce((acc, m) => acc + m.todayHoursWorked, 0);
 
-  const reportTotalHours = (report ?? []).reduce((s, r) => s + r.hoursWorked, 0);
-  const reportTotalCost = (report ?? []).reduce((s, r) => s + r.cost, 0);
-  const reportTotalLogged = (report ?? []).reduce((s, r) => s + r.loggedHours, 0);
+  const reportTotalHours = filteredReport.reduce((s, r) => s + r.hoursWorked, 0);
+  const reportTotalCost = filteredReport.reduce((s, r) => s + r.cost, 0);
+  const reportTotalLogged = filteredReport.reduce((s, r) => s + r.loggedHours, 0);
 
   return (
     <AppShell session={session}>
       {/* Header */}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Team</h1>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">IT Team</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Workforce directory, real-time shift attendance, hourly project activity reports, and comprehensive employee records.
+            IT Team workforce directory, real-time shift attendance, hourly project activity reports, and comprehensive employee records.
           </p>
         </div>
 
@@ -242,7 +249,7 @@ function TeamPage() {
               }`}
             >
               <Users className="size-3.5" />
-              Team Members ({totalMembers})
+              IT Team Members ({totalMembers})
             </button>
             <button
               onClick={() => setActiveMainTab("report")}
@@ -392,7 +399,6 @@ function TeamPage() {
                       <th className="px-4 py-3.5">Employee Name & Email</th>
                       <th className="px-4 py-3.5">Role</th>
                       <th className="px-4 py-3.5">Job Title & Dept</th>
-                      <th className="px-4 py-3.5">Hourly Rate</th>
                       <th className="px-4 py-3.5">Live Shift</th>
                       <th className="px-4 py-3.5">Account Status</th>
                       <th className="px-4 py-3.5 text-right">Actions</th>
@@ -427,9 +433,6 @@ function TeamPage() {
                         <td className="px-4 py-3.5">
                           <p className="font-medium text-foreground">{member.jobTitle || "—"}</p>
                           <p className="text-xs text-muted-foreground">{member.department || "—"}</p>
-                        </td>
-                        <td className="stat-number px-4 py-3.5 font-semibold text-foreground">
-                          ${member.hourlyRate.toFixed(2)}/hr
                         </td>
                         <td className="px-4 py-3.5">
                           {member.isClockedIn ? (
@@ -799,10 +802,6 @@ function EmployeeCard({
               <span className="truncate">{member.email}</span>
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <DollarSign className="size-3.5 shrink-0 text-muted-foreground/70" />
-            <span className="stat-number font-semibold text-foreground">${member.hourlyRate.toFixed(2)}/hr</span>
-          </div>
         </div>
 
         {/* Live Attendance Status Banner */}
@@ -1319,12 +1318,6 @@ function EmployeeAllDataModal({
                         >
                           <UserCheck className="size-3.5" />
                           {data.profile.isActive ? "Active Account" : "Suspended / Inactive"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="block text-xs text-muted-foreground">Hourly Rate</span>
-                        <span className="stat-number font-semibold text-foreground">
-                          ${data.profile.hourlyRate.toFixed(2)}/hr
                         </span>
                       </div>
                       <div>

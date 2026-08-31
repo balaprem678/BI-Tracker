@@ -8,6 +8,7 @@ export type MyProfile = {
   full_name: string;
   job_title: string | null;
   department: string | null;
+  staff_section: string | null;
   hourly_rate: number;
   is_active: boolean;
   created_at: string;
@@ -41,7 +42,7 @@ export type MyProfile = {
 };
 
 const PROFILE_SELECT =
-  "id, email, full_name, job_title, department, hourly_rate, is_active, created_at, " +
+  "id, email, full_name, job_title, department, staff_section, hourly_rate, is_active, created_at, " +
   "gender, date_of_birth, mobile, address, city, state, pincode, photo_url, " +
   "job_type, joining_date, work_location, " +
   "salary, salary_type, bank_account, pan, uan, pf_number, experience, previous_company, " +
@@ -54,6 +55,7 @@ function mapProfile(data: any): MyProfile {
     full_name: data?.full_name ?? "",
     job_title: data?.job_title ?? null,
     department: data?.department ?? null,
+    staff_section: data?.staff_section ?? "IT Team",
     hourly_rate: Number(data?.hourly_rate ?? 0),
     is_active: data?.is_active ?? true,
     created_at: data?.created_at ?? "",
@@ -131,6 +133,7 @@ const updateInput = z.object({
   // Employment
   jobTitle: z.string().trim().max(120).optional().or(z.literal("")),
   department: z.string().trim().max(120).optional().or(z.literal("")),
+  staffSection: z.string().optional().or(z.literal("")),
   jobType: z.string().trim().max(20).optional().or(z.literal("")),
   joiningDate: z.string().optional().or(z.literal("")),
   workLocation: z.string().trim().max(120).optional().or(z.literal("")),
@@ -184,6 +187,7 @@ export const updateMyProfile = createServerFn({ method: "POST" })
         photo_url: data.photoUrl || null,
         job_title: data.jobTitle || null,
         department: data.department || null,
+        staff_section: data.staffSection || "IT Team",
         job_type: data.jobType || null,
         joining_date: data.joiningDate || null,
         work_location: data.workLocation || null,

@@ -146,6 +146,7 @@ function initForm(p: MyProfile | null | undefined) {
     photoUrl: p?.photo_url ?? "",
     jobTitle: p?.job_title ?? "",
     department: p?.department ?? "",
+    staffSection: p?.staff_section ?? "IT Team",
     jobType: p?.job_type ?? "",
     joiningDate: p?.joining_date ?? "",
     workLocation: p?.work_location ?? "",
@@ -339,6 +340,15 @@ function AdminEmployeeProfile() {
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Designation / Job Title" value={form.jobTitle} onChange={set("jobTitle")} placeholder="e.g. Senior Analyst" />
               <Field label="Department" value={form.department} onChange={set("department")} placeholder="e.g. Business Intelligence" />
+              <SelectField
+                label="Staff Section"
+                value={form.staffSection}
+                onChange={set("staffSection")}
+                options={[
+                  { value: "IT Team", label: "IT Team" },
+                  { value: "BI Staff", label: "BI Staff" },
+                ]}
+              />
               <SelectField
                 label="Job Type"
                 value={form.jobType}

@@ -19,6 +19,7 @@ export type LocalProfile = {
   full_name: string;
   job_title: string | null;
   department: string | null;
+  staff_section?: "IT Team" | "BI Staff" | string | null;
   hourly_rate: number;
   is_active: boolean;
   created_at: string;
@@ -94,6 +95,40 @@ export type LocalLeaveRequest = {
   updated_at: string;
 };
 
+export type LocalProject = {
+  id: string;
+  name: string;
+  code?: string | null;
+  description?: string | null;
+  status: string; // Active, Completed, On Hold
+  assigned_sub_admin_id?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LocalProjectAssignment = {
+  id: string;
+  project_id: string;
+  user_id: string;
+  assigned_at: string;
+};
+
+export type LocalProjectSession = {
+  id: string;
+  user_id: string;
+  project_id: string;
+  project_name: string;
+  session_date: string;
+  start_time: string;
+  end_time: string | null;
+  duration_seconds: number;
+  status: string; // In Progress, Paused, Completed, On Hold, Blocked, Auto-Stopped
+  task_summary: string | null;
+  daily_ended: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export interface LocalDatabaseSchema {
   users: LocalUser[];
   profiles: LocalProfile[];
@@ -101,6 +136,9 @@ export interface LocalDatabaseSchema {
   shifts: LocalShift[];
   hourly_logs: LocalHourlyLog[];
   leave_requests: LocalLeaveRequest[];
+  projects: LocalProject[];
+  project_assignments: LocalProjectAssignment[];
+  project_sessions: LocalProjectSession[];
 }
 
 const LOCAL_STORAGE_KEY = "bi_tracker_local_db_v1";
@@ -174,6 +212,7 @@ export function generateSeedData(): LocalDatabaseSchema {
     full_name: u.fullName,
     job_title: u.jobTitle ?? null,
     department: u.department ?? null,
+    staff_section: u.id === SEED_EMPLOYEE_ID ? "BI Staff" : "IT Team",
     hourly_rate: u.hourlyRate,
     is_active: u.isActive,
     created_at: u.createdAt,
@@ -386,6 +425,81 @@ export function generateSeedData(): LocalDatabaseSchema {
     },
   ];
 
+  const projects: LocalProject[] = [
+    {
+      id: "proj-1",
+      name: "Executive KPI Dashboard",
+      code: "EKPI-01",
+      description: "Executive business intelligence metrics, real-time KPI aggregations, and management dashboards.",
+      status: "Active",
+      assigned_sub_admin_id: SEED_SUBADMIN_ID,
+      created_at: sampleDateIso(-10, 9, 0),
+      updated_at: sampleDateIso(-10, 9, 0),
+    },
+    {
+      id: "proj-2",
+      name: "Customer Analytics Portal",
+      code: "CAP-02",
+      description: "Customer lifecycle analytics, churn prediction pipelines, and cohort retention visualizers.",
+      status: "Active",
+      assigned_sub_admin_id: SEED_SUBADMIN_ID,
+      created_at: sampleDateIso(-10, 9, 0),
+      updated_at: sampleDateIso(-10, 9, 0),
+    },
+    {
+      id: "proj-3",
+      name: "Data Warehouse ETL Migration",
+      code: "DW-03",
+      description: "Automated ETL extraction pipelines and PostgreSQL warehouse data consolidation.",
+      status: "Active",
+      assigned_sub_admin_id: SEED_SUBADMIN_ID,
+      created_at: sampleDateIso(-8, 9, 0),
+      updated_at: sampleDateIso(-8, 9, 0),
+    },
+  ];
+
+  const project_assignments: LocalProjectAssignment[] = [
+    { id: "assign-1", project_id: "proj-1", user_id: SEED_EMPLOYEE_ID, assigned_at: sampleDateIso(-10, 9, 0) },
+    { id: "assign-2", project_id: "proj-2", user_id: SEED_EMPLOYEE_ID, assigned_at: sampleDateIso(-10, 9, 0) },
+    { id: "assign-3", project_id: "proj-3", user_id: SEED_EMPLOYEE_ID, assigned_at: sampleDateIso(-8, 9, 0) },
+    { id: "assign-4", project_id: "proj-1", user_id: SEED_SUBADMIN_ID, assigned_at: sampleDateIso(-10, 9, 0) },
+    { id: "assign-5", project_id: "proj-2", user_id: SEED_SUBADMIN_ID, assigned_at: sampleDateIso(-10, 9, 0) },
+    { id: "assign-6", project_id: "proj-3", user_id: SEED_SUBADMIN_ID, assigned_at: sampleDateIso(-8, 9, 0) },
+  ];
+
+  const project_sessions: LocalProjectSession[] = [
+    {
+      id: "sess-1",
+      user_id: SEED_EMPLOYEE_ID,
+      project_id: "proj-1",
+      project_name: "Executive KPI Dashboard",
+      session_date: today,
+      start_time: sampleDateIso(0, 9, 15),
+      end_time: sampleDateIso(0, 10, 45),
+      duration_seconds: 5400,
+      status: "Paused",
+      task_summary: "Created PowerBI / Metabase dashboard widget components",
+      daily_ended: false,
+      created_at: sampleDateIso(0, 9, 15),
+      updated_at: sampleDateIso(0, 10, 45),
+    },
+    {
+      id: "sess-2",
+      user_id: SEED_EMPLOYEE_ID,
+      project_id: "proj-2",
+      project_name: "Customer Analytics Portal",
+      session_date: today,
+      start_time: sampleDateIso(0, 11, 0),
+      end_time: sampleDateIso(0, 12, 30),
+      duration_seconds: 5400,
+      status: "Paused",
+      task_summary: "Designed cohort retention heatmaps and data validation queries",
+      daily_ended: false,
+      created_at: sampleDateIso(0, 11, 0),
+      updated_at: sampleDateIso(0, 12, 30),
+    },
+  ];
+
   return {
     users,
     profiles,
@@ -393,6 +507,9 @@ export function generateSeedData(): LocalDatabaseSchema {
     shifts,
     hourly_logs,
     leave_requests,
+    projects,
+    project_assignments,
+    project_sessions,
   };
 }
 

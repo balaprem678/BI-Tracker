@@ -39,6 +39,7 @@ function AdminPanel() {
     fullName: "",
     jobTitle: "",
     department: "",
+    staffSection: "IT Team" as "IT Team" | "BI Staff",
     hourlyRate: "0",
     role: "employee" as "employee" | "admin" | "sub_admin",
   });
@@ -55,6 +56,7 @@ function AdminPanel() {
           fullName: form.fullName,
           jobTitle: form.jobTitle,
           department: form.department,
+          staffSection: form.staffSection,
           hourlyRate: Number(form.hourlyRate) || 0,
           role: form.role,
         },
@@ -72,6 +74,7 @@ function AdminPanel() {
         fullName: "",
         jobTitle: "",
         department: "",
+        staffSection: "IT Team",
         hourlyRate: "0",
         role: "employee",
       });
@@ -181,25 +184,46 @@ function AdminPanel() {
                 onChange={(v) => setForm({ ...form, department: v })}
               />
             </div>
-            <label className="block">
-              <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                Access Role
-              </span>
-              <select
-                value={form.role}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    role: e.target.value as "employee" | "admin" | "sub_admin",
-                  })
-                }
-                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-              >
-                <option value="employee">Employee</option>
-                <option value="sub_admin">Sub Admin</option>
-                <option value="admin">Administrator</option>
-              </select>
-            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                  Staff Section
+                </span>
+                <select
+                  value={form.staffSection}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      staffSection: e.target.value as "IT Team" | "BI Staff",
+                    })
+                  }
+                  className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                >
+                  <option value="IT Team">IT Team</option>
+                  <option value="BI Staff">BI Staff</option>
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                  Access Role
+                </span>
+                <select
+                  value={form.role}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      role: e.target.value as "employee" | "admin" | "sub_admin",
+                    })
+                  }
+                  className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                >
+                  <option value="employee">Employee</option>
+                  <option value="sub_admin">Sub Admin</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </label>
+            </div>
 
             <button
               type="submit"

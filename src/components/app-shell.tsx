@@ -56,28 +56,36 @@ export function AppShell({
   const nav =
     session.role === "sub_admin"
       ? [{ to: "/project", label: "Project", icon: FolderKanban }]
-      : [
-          { to: "/dashboard", label: "Dashboard", icon: Clock },
-          { to: "/project", label: "Project", icon: FolderKanban },
-          ...(session.role === "admin"
-            ? [{ to: "/team", label: "Team", icon: Users }]
-            : []),
-          { to: "/leave", label: "Leave", icon: CalendarDays },
-          { to: "/settings", label: "Setting", icon: Settings },
-        ];
+      : session.role === "admin"
+        ? [
+            { to: "/admin", label: "Admin Panel", icon: ShieldCheck },
+            { to: "/team", label: "IT Team", icon: Users },
+            { to: "/bi-staff", label: "BI Staff", icon: UserRound },
+            { to: "/project", label: "Project", icon: FolderKanban },
+            { to: "/settings", label: "Setting", icon: Settings },
+          ]
+        : [
+            { to: "/dashboard", label: "Dashboard", icon: Clock },
+            { to: "/project", label: "Project", icon: FolderKanban },
+            { to: "/leave", label: "Leave", icon: CalendarDays },
+            { to: "/settings", label: "Setting", icon: Settings },
+          ];
 
   const tabs =
     session.role === "sub_admin"
       ? [{ to: "/project", label: "Project", icon: FolderKanban }]
-      : [
-          { to: "/dashboard", label: "My Shift", icon: Clock },
-          ...(session.role === "admin"
-            ? [
-                { to: "/team", label: "Team", icon: Users },
-                { to: "/admin", label: "Admin Panel", icon: ShieldCheck },
-              ]
-            : []),
-        ];
+      : session.role === "admin"
+        ? [
+            { to: "/admin", label: "Admin Panel", icon: ShieldCheck },
+            { to: "/team", label: "IT Team", icon: Users },
+            { to: "/bi-staff", label: "BI Staff", icon: UserRound },
+            { to: "/project", label: "Project", icon: FolderKanban },
+          ]
+        : [
+            { to: "/dashboard", label: "My Shift", icon: Clock },
+            { to: "/project", label: "Project", icon: FolderKanban },
+            { to: "/leave", label: "Leave", icon: CalendarDays },
+          ];
 
 
   const initials =

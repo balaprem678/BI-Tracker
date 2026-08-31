@@ -17,6 +17,7 @@ export type Employee = {
   full_name: string;
   job_title: string | null;
   department: string | null;
+  staff_section: string | null;
   hourly_rate: number;
   is_active: boolean;
   role: "admin" | "sub_admin" | "employee";
@@ -29,7 +30,7 @@ export const listEmployees = createServerFn({ method: "GET" })
     const [{ data: profiles, error }, { data: roles }] = await Promise.all([
       context.supabase
         .from("profiles")
-        .select("id, email, full_name, job_title, department, hourly_rate, is_active")
+        .select("id, email, full_name, job_title, department, staff_section, hourly_rate, is_active")
         .order("full_name", { ascending: true }),
       context.supabase.from("user_roles").select("user_id, role"),
     ]);
@@ -42,6 +43,7 @@ export const listEmployees = createServerFn({ method: "GET" })
     );
     return (profiles ?? []).map((p: any) => ({
       ...p,
+      staff_section: p.staff_section ?? "IT Team",
       hourly_rate: Number(p.hourly_rate ?? 0),
       role: adminIds.has(p.id) ? "admin" : subAdminIds.has(p.id) ? "sub_admin" : "employee",
     }));
@@ -53,6 +55,7 @@ const createInput = z.object({
   fullName: z.string().trim().min(1).max(120),
   jobTitle: z.string().trim().max(120).optional().or(z.literal("")),
   department: z.string().trim().max(120).optional().or(z.literal("")),
+  staffSection: z.enum(["IT Team", "BI Staff"]).optional().default("IT Team"),
   hourlyRate: z.number().min(0).max(10000),
   role: z.enum(["employee", "admin", "sub_admin"]),
 });
@@ -72,6 +75,7 @@ export const createEmployee = createServerFn({ method: "POST" })
         full_name: data.fullName,
         job_title: data.jobTitle || null,
         department: data.department || null,
+        staff_section: data.staffSection,
         hourly_rate: data.hourlyRate,
       },
     });
@@ -86,6 +90,7 @@ export const createEmployee = createServerFn({ method: "POST" })
         full_name: data.fullName,
         job_title: data.jobTitle || null,
         department: data.department || null,
+        staff_section: data.staffSection,
         hourly_rate: data.hourlyRate,
         email: data.email,
       })
@@ -120,6 +125,7 @@ export type ReportRow = {
   userId: string;
   name: string;
   department: string | null;
+  staffSection: string | null;
   hourlyRate: number;
   hoursWorked: number;
   loggedHours: number;
@@ -154,7 +160,7 @@ export const getHourlyReport = createServerFn({ method: "GET" })
     const [{ data: profiles }, { data: shifts }, { data: logs }] = await Promise.all([
       context.supabase
         .from("profiles")
-        .select("id, full_name, department, hourly_rate, is_active"),
+        .select("id, full_name, department, staff_section, hourly_rate, is_active"),
       context.supabase
         .from("shifts")
         .select("user_id, clock_in, clock_out")
@@ -185,6 +191,7 @@ export const getHourlyReport = createServerFn({ method: "GET" })
         userId: p.id,
         name: p.full_name || "Unnamed",
         department: p.department,
+        staffSection: p.staff_section ?? "IT Team",
         hourlyRate: rate,
         hoursWorked: Math.round(hours * 100) / 100,
         loggedHours: userLogs.length,

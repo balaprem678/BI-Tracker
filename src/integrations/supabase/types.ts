@@ -102,6 +102,7 @@ export type Database = {
           id: string
           is_active: boolean
           job_title: string | null
+          staff_section: string
           updated_at: string
         }
         Insert: {
@@ -113,6 +114,7 @@ export type Database = {
           id: string
           is_active?: boolean
           job_title?: string | null
+          staff_section?: string
           updated_at?: string
         }
         Update: {
@@ -124,6 +126,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           job_title?: string | null
+          staff_section?: string
           updated_at?: string
         }
         Relationships: []
@@ -152,6 +155,108 @@ export type Database = {
           id?: string
           note?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          id: string
+          name: string
+          code: string | null
+          description: string | null
+          status: string
+          assigned_sub_admin_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          code?: string | null
+          description?: string | null
+          status?: string
+          assigned_sub_admin_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          code?: string | null
+          description?: string | null
+          status?: string
+          assigned_sub_admin_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      project_assignments: {
+        Row: {
+          id: string
+          project_id: string
+          user_id: string
+          assigned_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          user_id: string
+          assigned_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          user_id?: string
+          assigned_at?: string
+        }
+        Relationships: []
+      }
+      project_sessions: {
+        Row: {
+          id: string
+          user_id: string
+          project_id: string
+          project_name: string
+          session_date: string
+          start_time: string
+          end_time: string | null
+          duration_seconds: number
+          status: string
+          task_summary: string | null
+          daily_ended: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          project_id: string
+          project_name: string
+          session_date?: string
+          start_time?: string
+          end_time?: string | null
+          duration_seconds?: number
+          status?: string
+          task_summary?: string | null
+          daily_ended?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          project_id?: string
+          project_name?: string
+          session_date?: string
+          start_time?: string
+          end_time?: string | null
+          duration_seconds?: number
+          status?: string
+          task_summary?: string | null
+          daily_ended?: boolean
+          created_at?: string
+          updated_at?: string
         }
         Relationships: []
       }

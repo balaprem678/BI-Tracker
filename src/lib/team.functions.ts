@@ -17,6 +17,7 @@ export type TeamMember = {
   email: string | null;
   jobTitle: string | null;
   department: string | null;
+  staffSection: string | null;
   hourlyRate: number;
   role: "admin" | "sub_admin" | "employee";
   isActive: boolean;
@@ -68,6 +69,7 @@ export type EmployeeAllData = {
     email: string | null;
     jobTitle: string | null;
     department: string | null;
+    staffSection: string | null;
     hourlyRate: number;
     role: "admin" | "sub_admin" | "employee";
     isActive: boolean;
@@ -99,6 +101,7 @@ export type TeamHourlyReportRow = {
   email: string | null;
   department: string | null;
   jobTitle: string | null;
+  staffSection: string | null;
   role: "admin" | "sub_admin" | "employee";
   hourlyRate: number;
   hoursWorked: number;
@@ -152,7 +155,7 @@ export const getTeamMembers = createServerFn({ method: "GET" })
     ] = await Promise.all([
       context.supabase
         .from("profiles")
-        .select("id, full_name, email, job_title, department, hourly_rate, is_active, created_at")
+        .select("id, full_name, email, job_title, department, staff_section, hourly_rate, is_active, created_at")
         .order("full_name", { ascending: true }),
       context.supabase.from("user_roles").select("user_id, role"),
       context.supabase.from("shifts").select("user_id, clock_in").is("clock_out", null),
@@ -213,6 +216,7 @@ export const getTeamMembers = createServerFn({ method: "GET" })
         email: p.email ?? null,
         jobTitle: p.job_title ?? null,
         department: p.department ?? null,
+        staffSection: p.staff_section ?? "IT Team",
         hourlyRate: Number(p.hourly_rate ?? 0),
         role,
         isActive: p.is_active ?? true,
@@ -247,7 +251,7 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
     ] = await Promise.all([
       context.supabase
         .from("profiles")
-        .select("id, full_name, email, job_title, department, hourly_rate, is_active, created_at, updated_at")
+        .select("id, full_name, email, job_title, department, staff_section, hourly_rate, is_active, created_at, updated_at")
         .eq("id", employeeId)
         .maybeSingle(),
       context.supabase.from("user_roles").select("role").eq("user_id", employeeId),
@@ -375,6 +379,7 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
         email: profile.email ?? null,
         jobTitle: profile.job_title ?? null,
         department: profile.department ?? null,
+        staffSection: profile.staff_section ?? "IT Team",
         hourlyRate: Number(profile.hourly_rate ?? 0),
         role,
         isActive: profile.is_active ?? true,
@@ -419,7 +424,7 @@ export const getTeamHourlyReport = createServerFn({ method: "GET" })
     ] = await Promise.all([
       context.supabase
         .from("profiles")
-        .select("id, full_name, email, job_title, department, hourly_rate, is_active"),
+        .select("id, full_name, email, job_title, department, staff_section, hourly_rate, is_active"),
       context.supabase.from("user_roles").select("user_id, role"),
       context.supabase
         .from("shifts")
@@ -468,6 +473,7 @@ export const getTeamHourlyReport = createServerFn({ method: "GET" })
         email: p.email ?? null,
         department: p.department,
         jobTitle: p.job_title,
+        staffSection: p.staff_section ?? "IT Team",
         role,
         hourlyRate: rate,
         hoursWorked: Math.round(hours * 100) / 100,

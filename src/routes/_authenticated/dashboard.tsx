@@ -38,13 +38,13 @@ import {
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
     meta: [
-      { title: "Employee Tracker — BI Tracker" },
+      { title: "Employee BI Tracker" },
       {
         name: "description",
         content:
           "Automated multi-project time tracker with real-time timers, auto-pause, and daily status logging.",
       },
-      { property: "og:title", content: "Employee Tracker — BI Tracker" },
+      { property: "og:title", content: "Employee BI Tracker" },
       {
         property: "og:description",
         content: "Track real-time project sessions with automated timers.",

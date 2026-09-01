@@ -91,6 +91,9 @@ export type LocalLeaveRequest = {
   leave_type: string;
   reason: string;
   status: string;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  reviewer_note?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -409,6 +412,9 @@ export function generateSeedData(): LocalDatabaseSchema {
       leave_type: "Casual",
       reason: "Family personal commitment",
       status: "Approved",
+      reviewed_by: SEED_ADMIN_ID,
+      reviewed_at: sampleDateIso(-2, 14, 0),
+      reviewer_note: "Approved. Please ensure project handover before leaving.",
       created_at: sampleDateIso(-3, 11, 0),
       updated_at: sampleDateIso(-2, 14, 0),
     },
@@ -420,8 +426,25 @@ export function generateSeedData(): LocalDatabaseSchema {
       leave_type: "Sick",
       reason: "Medical appointment",
       status: "Pending",
+      reviewed_by: null,
+      reviewed_at: null,
+      reviewer_note: null,
       created_at: sampleDateIso(-1, 15, 0),
       updated_at: sampleDateIso(-1, 15, 0),
+    },
+    {
+      id: "leave-3",
+      user_id: SEED_EMPLOYEE_ID,
+      start_date: todayStr(3),
+      end_date: todayStr(4),
+      leave_type: "Annual",
+      reason: "Family travel and vacation",
+      status: "Pending",
+      reviewed_by: null,
+      reviewed_at: null,
+      reviewer_note: null,
+      created_at: sampleDateIso(0, 9, 30),
+      updated_at: sampleDateIso(0, 9, 30),
     },
   ];
 

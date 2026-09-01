@@ -22,6 +22,8 @@ import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedProjectRouteImport } from './routes/_authenticated/project'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedTeamRouteImport } from './routes/_authenticated/team'
+import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
+import { Route as AuthenticatedAdminLeaveRouteImport } from './routes/_authenticated/admin.leave'
 import { Route as AuthenticatedAdminEmployeeIdRouteImport } from './routes/_authenticated/admin.employee.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -88,6 +90,16 @@ const AuthenticatedTeamRoute = AuthenticatedTeamRouteImport.update({
   path: '/team',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedAdminRoute,
+} as any)
+const AuthenticatedAdminLeaveRoute = AuthenticatedAdminLeaveRouteImport.update({
+  id: '/leave',
+  path: '/leave',
+  getParentRoute: () => AuthenticatedAdminRoute,
+} as any)
 const AuthenticatedAdminEmployeeIdRoute =
   AuthenticatedAdminEmployeeIdRouteImport.update({
     id: '/employee/$id',
@@ -108,6 +120,8 @@ export interface FileRoutesByFullPath {
   '/project': typeof AuthenticatedProjectRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/team': typeof AuthenticatedTeamRoute
+  '/admin/leave': typeof AuthenticatedAdminLeaveRoute
+  '/admin/': typeof AuthenticatedAdminIndexRoute
   '/admin/employee/$id': typeof AuthenticatedAdminEmployeeIdRoute
 }
 export interface FileRoutesByTo {
@@ -115,7 +129,6 @@ export interface FileRoutesByTo {
   '/admin-login': typeof AdminLoginRoute
   '/auth': typeof AuthRoute
   '/sub-admin-login': typeof SubAdminLoginRoute
-  '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/bi-staff': typeof AuthenticatedBiStaffRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/leave': typeof AuthenticatedLeaveRoute
@@ -123,6 +136,8 @@ export interface FileRoutesByTo {
   '/project': typeof AuthenticatedProjectRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/team': typeof AuthenticatedTeamRoute
+  '/admin/leave': typeof AuthenticatedAdminLeaveRoute
+  '/admin': typeof AuthenticatedAdminIndexRoute
   '/admin/employee/$id': typeof AuthenticatedAdminEmployeeIdRoute
 }
 export interface FileRoutesById {
@@ -140,6 +155,8 @@ export interface FileRoutesById {
   '/_authenticated/project': typeof AuthenticatedProjectRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/team': typeof AuthenticatedTeamRoute
+  '/_authenticated/admin/leave': typeof AuthenticatedAdminLeaveRoute
+  '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/admin/employee/$id': typeof AuthenticatedAdminEmployeeIdRoute
 }
 export interface FileRouteTypes {
@@ -157,6 +174,8 @@ export interface FileRouteTypes {
     | '/project'
     | '/settings'
     | '/team'
+    | '/admin/leave'
+    | '/admin/'
     | '/admin/employee/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -164,7 +183,6 @@ export interface FileRouteTypes {
     | '/admin-login'
     | '/auth'
     | '/sub-admin-login'
-    | '/admin'
     | '/bi-staff'
     | '/dashboard'
     | '/leave'
@@ -172,6 +190,8 @@ export interface FileRouteTypes {
     | '/project'
     | '/settings'
     | '/team'
+    | '/admin/leave'
+    | '/admin'
     | '/admin/employee/$id'
   id:
     | '__root__'
@@ -188,6 +208,8 @@ export interface FileRouteTypes {
     | '/_authenticated/project'
     | '/_authenticated/settings'
     | '/_authenticated/team'
+    | '/_authenticated/admin/leave'
+    | '/_authenticated/admin/'
     | '/_authenticated/admin/employee/$id'
   fileRoutesById: FileRoutesById
 }
@@ -292,6 +314,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTeamRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/admin/': {
+      id: '/_authenticated/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/leave': {
+      id: '/_authenticated/admin/leave'
+      path: '/leave'
+      fullPath: '/admin/leave'
+      preLoaderRoute: typeof AuthenticatedAdminLeaveRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/employee/$id': {
       id: '/_authenticated/admin/employee/$id'
       path: '/employee/$id'
@@ -303,10 +339,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedAdminRouteChildren {
+  AuthenticatedAdminLeaveRoute: typeof AuthenticatedAdminLeaveRoute
+  AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedAdminEmployeeIdRoute: typeof AuthenticatedAdminEmployeeIdRoute
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
+  AuthenticatedAdminLeaveRoute: AuthenticatedAdminLeaveRoute,
+  AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
   AuthenticatedAdminEmployeeIdRoute: AuthenticatedAdminEmployeeIdRoute,
 }
 

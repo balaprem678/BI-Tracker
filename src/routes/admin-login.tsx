@@ -123,34 +123,6 @@ function AdminLoginPage() {
               Sign in with your Administrator account to access payroll and team management.
             </p>
 
-            {/* 1-Click Quick Login */}
-            {/* <div className="mt-5 rounded-lg border border-primary/20 bg-primary/5 p-3.5">
-              <p className="flex items-center gap-1.5 text-xs font-semibold text-primary">
-                <Sparkles className="size-3.5" /> 1-Click Admin Demo Login
-              </p>
-              <div className="mt-2.5">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => performLogin(DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD)}
-                  className="flex w-full items-center justify-between rounded-md border border-border bg-background p-2.5 text-left transition-colors hover:border-primary hover:bg-secondary disabled:opacity-60"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="grid size-7 place-items-center rounded-md bg-primary/10 text-primary">
-                      <Shield className="size-4" />
-                    </span>
-                    <div>
-                      <p className="text-xs font-semibold text-foreground">BI Admin</p>
-                      <p className="text-[10px] text-muted-foreground">System Administrator</p>
-                    </div>
-                  </div>
-                  <span className="flex items-center gap-1 text-xs font-medium text-primary">
-                    Login <ArrowRight className="size-3" />
-                  </span>
-                </button>
-              </div>
-            </div> */}
-
             <form onSubmit={handleSignIn} className="mt-5 space-y-4">
               <Field
                 label="Admin Username or Email"

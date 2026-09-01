@@ -98,34 +98,6 @@ function AuthPage() {
           Sign in with your employee account to clock shifts and record hourly activity logs.
         </p>
 
-        {/* 1-Click Quick Login */}
-        {/* <div className="mt-5 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3.5">
-          <p className="flex items-center gap-1.5 text-xs font-semibold text-blue-400">
-            <Sparkles className="size-3.5" /> 1-Click Employee Demo Login
-          </p>
-          <div className="mt-2.5">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => performLogin(EMPLOYEE_EMAIL, DEFAULT_ADMIN_PASSWORD)}
-              className="flex w-full items-center justify-between rounded-md border border-border bg-background p-2.5 text-left transition-colors hover:border-blue-500 hover:bg-secondary disabled:opacity-60"
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="grid size-7 place-items-center rounded-md bg-blue-500/10 text-blue-400">
-                  <User className="size-4" />
-                </span>
-                <div>
-                  <p className="text-xs font-semibold text-foreground">Alex Rivera</p>
-                  <p className="text-[10px] text-muted-foreground">Software Engineer</p>
-                </div>
-              </div>
-              <span className="flex items-center gap-1 text-xs font-medium text-blue-400">
-                Login <ArrowRight className="size-3" />
-              </span>
-            </button>
-          </div>
-        </div> */}
-
         <form onSubmit={handleSignIn} className="mt-5 space-y-4">
           <Field
             label="Work Email"

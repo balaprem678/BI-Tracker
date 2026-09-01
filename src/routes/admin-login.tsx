@@ -124,7 +124,7 @@ function AdminLoginPage() {
             </p>
 
             {/* 1-Click Quick Login */}
-            <div className="mt-5 rounded-lg border border-primary/20 bg-primary/5 p-3.5">
+            {/* <div className="mt-5 rounded-lg border border-primary/20 bg-primary/5 p-3.5">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-primary">
                 <Sparkles className="size-3.5" /> 1-Click Admin Demo Login
               </p>
@@ -149,7 +149,7 @@ function AdminLoginPage() {
                   </span>
                 </button>
               </div>
-            </div>
+            </div> */}
 
             <form onSubmit={handleSignIn} className="mt-5 space-y-4">
               <Field

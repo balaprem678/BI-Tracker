@@ -99,7 +99,7 @@ function AuthPage() {
         </p>
 
         {/* 1-Click Quick Login */}
-        <div className="mt-5 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3.5">
+        {/* <div className="mt-5 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3.5">
           <p className="flex items-center gap-1.5 text-xs font-semibold text-blue-400">
             <Sparkles className="size-3.5" /> 1-Click Employee Demo Login
           </p>
@@ -124,7 +124,7 @@ function AuthPage() {
               </span>
             </button>
           </div>
-        </div>
+        </div> */}
 
         <form onSubmit={handleSignIn} className="mt-5 space-y-4">
           <Field

@@ -9,9 +9,10 @@ export const DEFAULT_ADMIN_FULL_NAME = "BI Admin";
 export function normalizeAdminIdentifier(identifier: string) {
   const value = identifier.trim();
   if (!value) return "";
-  return value.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()
-    ? DEFAULT_ADMIN_EMAIL
-    : value;
+  if (value.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
+    return DEFAULT_ADMIN_EMAIL;
+  }
+  return value;
 }
 
 /**

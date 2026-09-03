@@ -3,6 +3,7 @@ export type Role = "admin" | "sub_admin" | "employee";
 export type LocalUser = {
   id: string;
   email: string;
+  username?: string;
   password?: string;
   fullName: string;
   jobTitle?: string | null;
@@ -174,6 +175,7 @@ export function generateSeedData(): LocalDatabaseSchema {
     {
       id: SEED_ADMIN_ID,
       email: "BIadmin@bi-tracker.local",
+      username: "biadmin",
       password: "BiTracker@07",
       fullName: "BI Admin",
       jobTitle: "System Administrator",
@@ -186,6 +188,7 @@ export function generateSeedData(): LocalDatabaseSchema {
     {
       id: SEED_SUBADMIN_ID,
       email: "subadmin@bi-tracker.local",
+      username: "subadmin",
       password: "BiTracker@07",
       fullName: "Sarah Jenkins",
       jobTitle: "Operations Lead",
@@ -198,6 +201,7 @@ export function generateSeedData(): LocalDatabaseSchema {
     {
       id: SEED_EMPLOYEE_ID,
       email: "employee@bi-tracker.local",
+      username: "employee",
       password: "BiTracker@07",
       fullName: "Alex Rivera",
       jobTitle: "Senior Analyst",
@@ -662,6 +666,13 @@ export function parseLocalJwt(token: string) {
   }
 }
 
+export function deriveLocalUsername(input?: string, fallbackEmail?: string) {
+  const candidate = (input ?? fallbackEmail ?? "").trim();
+  if (!candidate) return "";
+  if (candidate.includes("@")) return candidate.split("@")[0].trim().toLowerCase();
+  return candidate.toLowerCase();
+}
+
 export interface LocalSession {
   access_token: string;
   token_type: string;
@@ -669,7 +680,8 @@ export interface LocalSession {
   user: {
     id: string;
     email: string;
-    user_metadata: { full_name?: string };
+    role?: Role;
+    user_metadata: { full_name?: string; username?: string };
   };
 }
 
@@ -989,7 +1001,11 @@ export function createLocalSupabaseClient() {
                   user: {
                     id: user.id,
                     email: user.email,
-                    user_metadata: { full_name: user.fullName },
+                    role: user.role,
+                    user_metadata: {
+                      full_name: user.fullName,
+                      username: user.username ?? deriveLocalUsername(user.email),
+                    },
                   },
                 },
                 error: null,
@@ -1015,11 +1031,14 @@ export function createLocalSupabaseClient() {
         const db = localDbManager.getDb();
         const cleanEmail = email.trim().toLowerCase();
 
-        const user = db.users.find(
-          (u) =>
+        const user = db.users.find((u) => {
+          const username = (u.username ?? deriveLocalUsername(u.email)).toLowerCase();
+          return (
             u.email.toLowerCase() === cleanEmail ||
-            (cleanEmail === "biadmin" && u.email.toLowerCase().includes("biadmin")),
-        );
+            username === cleanEmail ||
+            (cleanEmail === "biadmin" && (u.email.toLowerCase().includes("biadmin") || username === "biadmin"))
+          );
+        });
 
         if (!user) {
           return { data: { user: null, session: null }, error: { message: "User not found." } };
@@ -1050,7 +1069,11 @@ export function createLocalSupabaseClient() {
           user: {
             id: user.id,
             email: user.email,
-            user_metadata: { full_name: user.fullName },
+            role: user.role,
+            user_metadata: {
+              full_name: user.fullName,
+              username: user.username ?? deriveLocalUsername(user.email),
+            },
           },
         };
 
@@ -1061,7 +1084,13 @@ export function createLocalSupabaseClient() {
       },
       signUp: async ({ email, password, options }: any) => {
         const db = localDbManager.getDb();
-        const existing = db.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+        const username = (options?.data?.username ?? deriveLocalUsername(email)).toLowerCase();
+        const existing =
+          db.users.find(
+            (u) =>
+              u.email.toLowerCase() === email.toLowerCase() ||
+              (u.username ?? deriveLocalUsername(u.email)).toLowerCase() === username,
+          ) || null;
         if (existing) {
           return { data: { user: null, session: null }, error: { message: "User already exists." } };
         }
@@ -1073,6 +1102,7 @@ export function createLocalSupabaseClient() {
         const newUser: LocalUser = {
           id: crypto.randomUUID(),
           email,
+          username,
           password: password || "BiTracker@07",
           fullName,
           jobTitle: options?.data?.job_title || null,
@@ -1120,7 +1150,11 @@ export function createLocalSupabaseClient() {
           user: {
             id: newUser.id,
             email: newUser.email,
-            user_metadata: { full_name: newUser.fullName },
+            role: newUser.role,
+            user_metadata: {
+              full_name: newUser.fullName,
+              username: newUser.username ?? deriveLocalUsername(newUser.email),
+            },
           },
         };
 
@@ -1162,7 +1196,13 @@ export function createLocalSupabaseClient() {
           email_confirm?: boolean;
         }) => {
           const db = localDbManager.getDb();
-          const existing = db.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+          const username = (user_metadata?.username ?? deriveLocalUsername(email)).toLowerCase();
+          const existing =
+            db.users.find(
+              (u) =>
+                u.email.toLowerCase() === email.toLowerCase() ||
+                (u.username ?? deriveLocalUsername(u.email)).toLowerCase() === username,
+            ) || null;
           if (existing) {
             return {
               data: { user: null },
@@ -1173,12 +1213,13 @@ export function createLocalSupabaseClient() {
           const newUser: LocalUser = {
             id: crypto.randomUUID(),
             email,
+            username,
             password: password || "BiTracker@07",
             fullName: user_metadata?.full_name || email.split("@")[0],
             jobTitle: user_metadata?.job_title || null,
             department: user_metadata?.department || null,
             hourlyRate: Number(user_metadata?.hourly_rate || 0),
-            role: "employee",
+            role: (user_metadata?.role as Role) || "employee",
             isActive: true,
             createdAt: new Date().toISOString(),
           };
@@ -1217,7 +1258,11 @@ export function createLocalSupabaseClient() {
               user: {
                 id: newUser.id,
                 email: newUser.email,
-                user_metadata: { full_name: newUser.fullName },
+                role: newUser.role,
+                user_metadata: {
+                  full_name: newUser.fullName,
+                  username: newUser.username ?? deriveLocalUsername(newUser.email),
+                },
               },
             },
             error: null,

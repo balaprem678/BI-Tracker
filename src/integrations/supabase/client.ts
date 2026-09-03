@@ -3,14 +3,17 @@ import { createLocalSupabaseClient } from "./local-db";
 
 const supabaseUrl =
   (typeof process !== "undefined" && (process.env["VITE_SUPABASE_URL"] || process.env["SUPABASE_URL"])) ||
-  import.meta.env?.VITE_SUPABASE_URL ||
-  import.meta.env?.SUPABASE_URL;
+  import.meta.env?.["VITE_SUPABASE_URL"] ||
+  import.meta.env?.["SUPABASE_URL"];
 
 const supabaseKey =
   (typeof process !== "undefined" &&
-    (process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || process.env["SUPABASE_PUBLISHABLE_KEY"])) ||
-  import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  import.meta.env?.SUPABASE_PUBLISHABLE_KEY;
+    (process.env["VITE_SUPABASE_ANON_KEY"] ||
+      process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+      process.env["SUPABASE_PUBLISHABLE_KEY"])) ||
+  import.meta.env?.["VITE_SUPABASE_ANON_KEY"] ||
+  import.meta.env?.["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+  import.meta.env?.["SUPABASE_PUBLISHABLE_KEY"];
 
 function createSupabaseClient() {
   if (supabaseUrl && supabaseKey && !supabaseUrl.includes("placeholder")) {

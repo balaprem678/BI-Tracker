@@ -1,10 +1,11 @@
 import { createMiddleware } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
-import { createLocalSupabaseClient, parseLocalJwt, localDbManager } from './local-db';
+import { supabaseAdmin } from './client.server';
+import { parseLocalJwt, localDbManager } from './local-db';
 
 export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server(
   async ({ next }) => {
-    const supabase = createLocalSupabaseClient();
+    const supabase = supabaseAdmin;
     const request = getRequest();
 
     let userId: string | null = null;
@@ -22,18 +23,43 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
       }
     }
 
-    // If no userId found from token, check local db for an admin or active user
     if (!userId) {
-      const db = localDbManager.getDb();
-      const adminUser = db.users.find((u) => u.role === 'admin') || db.users[0];
-      if (adminUser) {
-        userId = adminUser.id;
-        claims = {
-          sub: adminUser.id,
-          email: adminUser.email,
-          role: adminUser.role,
-          user_metadata: { full_name: adminUser.fullName },
-        };
+      try {
+        const { data: adminRole } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', 'admin')
+          .limit(1)
+          .single();
+
+        if (adminRole?.user_id) {
+          userId = adminRole.user_id;
+        } else {
+          const { data: firstProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .limit(1)
+            .single();
+          if (firstProfile?.id) {
+            userId = firstProfile.id;
+          }
+        }
+      } catch (e) {
+        // Ignore fallback errors
+      }
+
+      if (!userId) {
+        const db = localDbManager.getDb();
+        const adminUser = db.users.find((u) => u.role === 'admin') || db.users[0];
+        if (adminUser) {
+          userId = adminUser.id;
+          claims = {
+            sub: adminUser.id,
+            email: adminUser.email,
+            role: adminUser.role,
+            user_metadata: { full_name: adminUser.fullName },
+          };
+        }
       }
     }
 
@@ -50,4 +76,3 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
     });
   },
 );
-

@@ -118,11 +118,24 @@ CREATE TABLE IF NOT EXISTS public.projects (
   name TEXT NOT NULL,
   code TEXT,
   description TEXT,
-  status TEXT NOT NULL DEFAULT 'Active',
+  status TEXT NOT NULL DEFAULT 'Not Started',
+  priority TEXT NOT NULL DEFAULT 'Medium',
+  deadline TIMESTAMPTZ,
+  estimated_hours NUMERIC NOT NULL DEFAULT 0,
+  progress_percent INTEGER NOT NULL DEFAULT 0,
+  start_date DATE,
+  completion_date DATE,
   assigned_sub_admin_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'Medium';
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS deadline TIMESTAMPTZ;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS estimated_hours NUMERIC NOT NULL DEFAULT 0;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS progress_percent INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS start_date DATE;
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS completion_date DATE;
 
 -- 9. Project assignments table
 CREATE TABLE IF NOT EXISTS public.project_assignments (

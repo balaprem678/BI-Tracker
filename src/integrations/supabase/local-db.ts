@@ -669,7 +669,7 @@ export function parseLocalJwt(token: string) {
 export function deriveLocalUsername(input?: string, fallbackEmail?: string) {
   const candidate = (input ?? fallbackEmail ?? "").trim();
   if (!candidate) return "";
-  if (candidate.includes("@")) return candidate.split("@")[0].trim().toLowerCase();
+  if (candidate.includes("@")) return (candidate.split("@")[0] || "").trim().toLowerCase();
   return candidate.toLowerCase();
 }
 

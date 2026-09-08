@@ -73,7 +73,7 @@ export const cancelLeave = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .eq("user_id", context.userId);
     if (error) throw new Error(error.message);
-    return { ok: true as const };
+    return { ok: true as const, message: "Leave request cancelled." };
   });
 
 // ==========================================
@@ -128,7 +128,7 @@ export const getAllLeaveRequests = createServerFn({ method: "POST" })
     if (lErr) throw new Error(lErr.message);
     if (pErr) throw new Error(pErr.message);
 
-    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    const profileMap = new Map<string, any>((profiles ?? []).map((p: any) => [p.id, p]));
 
     const enriched: LeaveRequest[] = (leaves ?? []).map((l: any) => {
       const emp = profileMap.get(l.user_id);
@@ -201,7 +201,7 @@ export const getPendingLeaveNotifications = createServerFn({ method: "GET" })
       supabase.from("profiles").select("id, full_name, email, department, staff_section"),
     ]);
 
-    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    const profileMap = new Map<string, any>((profiles ?? []).map((p: any) => [p.id, p]));
 
     const recentPending: LeaveRequest[] = (pendingLeaves ?? []).slice(0, 8).map((l: any) => {
       const emp = profileMap.get(l.user_id);

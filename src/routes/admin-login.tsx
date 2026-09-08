@@ -39,7 +39,7 @@ function AdminLoginPage() {
   const bootstrapFn = useServerFn(createFirstAdmin);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data }: { data: any }) => {
       if (data.session) navigate({ to: "/admin", replace: true });
     });
   }, [navigate]);

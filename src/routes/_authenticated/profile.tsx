@@ -570,7 +570,7 @@ function ProfilePage() {
                 placeholder="PF account number"
                 readOnly={isEmployee}
               />
-              <Field
+              {/* <Field
                 label="Experience"
                 value={form.experience}
                 onChange={set("experience")}
@@ -581,7 +581,7 @@ function ProfilePage() {
                 value={form.previousCompany}
                 onChange={set("previousCompany")}
                 placeholder="e.g. Acme Corp"
-              />
+              /> */}
             </div>
           </SectionCard>
         )}
@@ -629,14 +629,14 @@ function ProfilePage() {
           <p className="text-xs text-muted-foreground">
             {profile.isLoading ? "Loading profile…" : `Last updated: ${profileData?.created_at ? new Date(profileData.created_at).toLocaleDateString() : "—"}`}
           </p>
-          <button
+          {/* <button
             onClick={() => save.mutate()}
             disabled={save.isPending || !form.fullName.trim()}
             className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-50"
           >
             <Save className="size-4" />
             {save.isPending ? "Saving…" : "Save Changes"}
-          </button>
+          </button> */}
         </div>
       </div>
     </AppShell>

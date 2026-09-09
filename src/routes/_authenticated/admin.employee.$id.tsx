@@ -459,8 +459,8 @@ function AdminEmployeeProfile() {
                 onChange={set("pfNumber")}
                 placeholder="PF account number"
               />
-              <Field label="Experience" value={form.experience} onChange={set("experience")} placeholder="e.g. 3 years" />
-              <Field label="Previous Company" value={form.previousCompany} onChange={set("previousCompany")} placeholder="e.g. Acme Corp" />
+              {/* <Field label="Experience" value={form.experience} onChange={set("experience")} placeholder="e.g. 3 years" /> */}
+              {/* <Field label="Previous Company" value={form.previousCompany} onChange={set("previousCompany")} placeholder="e.g. Acme Corp" /> */}
             </div>
           </SectionCard>
         )}
@@ -480,7 +480,7 @@ function AdminEmployeeProfile() {
         )}
 
         {/* Bottom save */}
-        <div className="mt-6 flex items-center justify-between rounded-xl border border-border bg-muted/30 px-5 py-3">
+        {/* <div className="mt-6 flex items-center justify-between rounded-xl border border-border bg-muted/30 px-5 py-3">
           <p className="text-xs text-muted-foreground">
             {profile.isLoading
               ? "Loading…"
@@ -494,7 +494,7 @@ function AdminEmployeeProfile() {
             <Save className="size-4" />
             {save.isPending ? "Saving…" : "Save Changes"}
           </button>
-        </div>
+        </div> */}
       </div>
     </AppShell>
   );

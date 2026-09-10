@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   LogOut,
   Menu,
+  Search,
   Settings,
   ShieldCheck,
   UserRound,
@@ -23,6 +24,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { SessionInfo } from "@/lib/tracker.functions";
 import { getPendingLeaveNotifications } from "@/lib/leave.functions";
+import { AdminSearchBar } from "@/components/admin-search-bar";
 
 export function AppShell({
   session,
@@ -36,6 +38,7 @@ export function AppShell({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -263,7 +266,7 @@ export function AppShell({
               <Menu className="size-4" />
             </button>
 
-            <nav className="flex items-center gap-1 rounded-md border border-border bg-secondary/40 p-1">
+            <nav className="flex items-center gap-1 rounded-md border border-border bg-secondary/40 p-1 shrink-0">
               {tabs.map((tab) => {
                 const active = pathname.startsWith(tab.to);
                 return (
@@ -288,7 +291,29 @@ export function AppShell({
               })}
             </nav>
 
+            {/* ADMIN TOP BAR SEARCH */}
+            {isAdmin && (
+              <div className="mx-2 hidden md:block flex-1 min-w-[180px] max-w-xs lg:max-w-sm xl:max-w-md">
+                <AdminSearchBar />
+              </div>
+            )}
+
             <div className="ml-auto flex items-center gap-2.5">
+              {/* MOBILE SEARCH TOGGLE */}
+              {isAdmin && (
+                <button
+                  onClick={() => setMobileSearchOpen((o) => !o)}
+                  aria-label="Search"
+                  title="Search employees, leaves, projects"
+                  className={`relative grid size-9 place-items-center rounded-md border text-muted-foreground transition-all hover:bg-secondary hover:text-foreground md:hidden ${
+                    mobileSearchOpen
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-card"
+                  }`}
+                >
+                  <Search className="size-4" />
+                </button>
+              )}
               {/* ADMIN REALTIME NOTIFICATION BELL */}
               {isAdmin && (
                 <div className="relative" ref={notifRef}>
@@ -420,6 +445,17 @@ export function AppShell({
               )}
             </div>
           </div>
+
+          {/* MOBILE EXPANDED SEARCH BAR FOR ADMINS */}
+          {isAdmin && mobileSearchOpen && (
+            <div className="border-t border-border bg-background/95 px-4 py-2.5 backdrop-blur md:hidden animate-in slide-in-from-top-1">
+              <AdminSearchBar
+                autoFocus
+                onClose={() => setMobileSearchOpen(false)}
+                placeholder="Search employees, leaves, projects..."
+              />
+            </div>
+          )}
         </header>
         <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
       </div>

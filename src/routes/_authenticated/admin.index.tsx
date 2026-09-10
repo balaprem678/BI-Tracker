@@ -11,7 +11,6 @@ import {
   listEmployees,
   setEmployeeActive,
 } from "@/lib/admin.functions";
-import { AdminSearchBar } from "@/components/admin-search-bar";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
@@ -163,11 +162,6 @@ function AdminPanel() {
           <Users className="size-4 text-primary" />
           View Team & Hourly Report <ArrowRight className="size-3.5" />
         </Link>
-      </div>
-
-      {/* COMMON SEARCH BAR AT THE TOP */}
-      <div className="mb-6">
-        <AdminSearchBar />
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">

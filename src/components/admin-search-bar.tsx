@@ -136,10 +136,14 @@ const QUICK_ACTIONS: SearchItem[] = [
 
 export function AdminSearchBar({
   className = "",
-  placeholder = "Search anything (employees, IT team, BI staff, leaves, projects, actions)...",
+  placeholder = "Search anything... (Ctrl+K)",
+  autoFocus = false,
+  onClose,
 }: {
   className?: string;
   placeholder?: string;
+  autoFocus?: boolean;
+  onClose?: () => void;
 }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -147,6 +151,14 @@ export function AdminSearchBar({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus if requested (e.g. mobile search modal/toggle)
+  useEffect(() => {
+    if (autoFocus) {
+      inputRef.current?.focus();
+      setIsOpen(true);
+    }
+  }, [autoFocus]);
 
   // Data fetching
   const employeesFn = useServerFn(listEmployees);
@@ -191,11 +203,12 @@ export function AdminSearchBar({
     function handleClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
+        onClose?.();
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [onClose]);
 
   // Format initials for avatar
   const getInitials = (name: string) => {
@@ -300,6 +313,7 @@ export function AdminSearchBar({
   const handleSelect = (item: SearchItem) => {
     setIsOpen(false);
     setQuery("");
+    onClose?.();
 
     if (item.actionId === "focus-create-form") {
       if (window.location.pathname === "/admin") {
@@ -340,6 +354,7 @@ export function AdminSearchBar({
     } else if (e.key === "Escape") {
       e.preventDefault();
       setIsOpen(false);
+      onClose?.();
     }
   };
 
@@ -361,14 +376,14 @@ export function AdminSearchBar({
     <div ref={containerRef} className={`relative w-full ${className}`}>
       {/* SEARCH INPUT BOX */}
       <div
-        className={`group flex items-center gap-2.5 rounded-xl border bg-card/90 px-3.5 py-2.5 shadow-sm backdrop-blur transition-all duration-200 ${
+        className={`group flex h-9 items-center gap-2 rounded-lg border bg-card/95 px-3 shadow-xs backdrop-blur transition-all duration-200 ${
           isOpen
-            ? "border-primary ring-2 ring-primary/20 shadow-md"
+            ? "border-primary ring-2 ring-primary/20 shadow-md bg-card"
             : "border-border hover:border-border/80 hover:bg-card"
         }`}
       >
         <Search
-          className={`size-4.5 shrink-0 transition-colors ${
+          className={`size-3.5 shrink-0 transition-colors ${
             isOpen ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
           }`}
         />
@@ -384,7 +399,7 @@ export function AdminSearchBar({
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+          className="w-full bg-transparent text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
 
         {query && (
@@ -401,15 +416,15 @@ export function AdminSearchBar({
         )}
 
         <div className="hidden items-center gap-1 sm:flex">
-          <kbd className="inline-flex items-center gap-0.5 rounded-md border border-border bg-muted/60 px-2 py-0.5 text-[10px] font-mono font-medium text-muted-foreground shadow-2xs">
-            <span className="text-xs">⌘</span>K
+          <kbd className="inline-flex items-center gap-0.5 rounded-md border border-border bg-muted/60 px-1.5 py-0.5 text-[10px] font-mono font-medium text-muted-foreground shadow-2xs">
+            <span className="text-[11px]">⌘</span>K
           </kbd>
         </div>
       </div>
 
       {/* DROPDOWN SUGGESTIONS POPOVER */}
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-[440px] overflow-y-auto rounded-xl border border-border bg-card p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="absolute left-0 top-full z-50 mt-2 w-full min-w-[300px] sm:min-w-[440px] md:min-w-[480px] max-w-[calc(100vw-2rem)] max-h-[440px] overflow-y-auto rounded-xl border border-border bg-card p-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-150">
           {filteredItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <div className="rounded-full bg-muted p-3 text-muted-foreground">

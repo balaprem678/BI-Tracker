@@ -42,59 +42,67 @@ export type MyProfile = {
 };
 
 const PROFILE_SELECT =
-  "id, email, full_name, job_title, department, staff_section, hourly_rate, is_active, created_at, " +
-  "gender, date_of_birth, mobile, address, city, state, pincode, photo_url, " +
-  "job_type, joining_date, work_location, " +
-  "salary, salary_type, bank_account, pan, uan, pf_number, experience, previous_company, " +
-  "emergency_contact_name, emergency_contact_relation, emergency_contact_phone, emergency_contact_address";
+  "id, email, full_name, job_title, department, staff_section, hourly_rate, is_active, created_at, updated_at";
 
-function mapProfile(data: any): MyProfile {
+function mapProfile(data: any, userMeta: any = {}): MyProfile {
   return {
     id: data?.id ?? "",
-    email: data?.email ?? null,
-    full_name: data?.full_name ?? "",
-    job_title: data?.job_title ?? null,
-    department: data?.department ?? null,
-    staff_section: data?.staff_section ?? "IT Team",
-    hourly_rate: Number(data?.hourly_rate ?? 0),
+    email: data?.email ?? userMeta?.email ?? null,
+    full_name: data?.full_name || userMeta?.full_name || "",
+    job_title: data?.job_title ?? userMeta?.job_title ?? null,
+    department: data?.department ?? userMeta?.department ?? null,
+    staff_section: data?.staff_section ?? userMeta?.staff_section ?? "IT Team",
+    hourly_rate: Number(data?.hourly_rate ?? userMeta?.hourly_rate ?? 0),
     is_active: data?.is_active ?? true,
     created_at: data?.created_at ?? "",
-    gender: data?.gender ?? null,
-    date_of_birth: data?.date_of_birth ?? null,
-    mobile: data?.mobile ?? null,
-    address: data?.address ?? null,
-    city: data?.city ?? null,
-    state: data?.state ?? null,
-    pincode: data?.pincode ?? null,
-    photo_url: data?.photo_url ?? null,
-    job_type: data?.job_type ?? null,
-    joining_date: data?.joining_date ?? null,
-    work_location: data?.work_location ?? null,
-    salary: data?.salary != null ? Number(data.salary) : null,
-    salary_type: data?.salary_type ?? null,
-    bank_account: data?.bank_account ?? null,
-    pan: data?.pan ?? null,
-    uan: data?.uan ?? null,
-    pf_number: data?.pf_number ?? null,
-    experience: data?.experience ?? null,
-    previous_company: data?.previous_company ?? null,
-    emergency_contact_name: data?.emergency_contact_name ?? null,
-    emergency_contact_relation: data?.emergency_contact_relation ?? null,
-    emergency_contact_phone: data?.emergency_contact_phone ?? null,
-    emergency_contact_address: data?.emergency_contact_address ?? null,
+    gender: userMeta?.gender ?? data?.gender ?? null,
+    date_of_birth: userMeta?.date_of_birth ?? data?.date_of_birth ?? null,
+    mobile: userMeta?.mobile ?? data?.mobile ?? null,
+    address: userMeta?.address ?? data?.address ?? null,
+    city: userMeta?.city ?? data?.city ?? null,
+    state: userMeta?.state ?? data?.state ?? null,
+    pincode: userMeta?.pincode ?? data?.pincode ?? null,
+    photo_url: userMeta?.photo_url ?? data?.photo_url ?? null,
+    job_type: userMeta?.job_type ?? data?.job_type ?? null,
+    joining_date: userMeta?.joining_date ?? data?.joining_date ?? null,
+    work_location: userMeta?.work_location ?? data?.work_location ?? null,
+    salary: userMeta?.salary != null ? Number(userMeta.salary) : (data?.salary != null ? Number(data.salary) : null),
+    salary_type: userMeta?.salary_type ?? data?.salary_type ?? null,
+    bank_account: userMeta?.bank_account ?? data?.bank_account ?? null,
+    pan: userMeta?.pan ?? data?.pan ?? null,
+    uan: userMeta?.uan ?? data?.uan ?? null,
+    pf_number: userMeta?.pf_number ?? data?.pf_number ?? null,
+    experience: userMeta?.experience ?? data?.experience ?? null,
+    previous_company: userMeta?.previous_company ?? data?.previous_company ?? null,
+    emergency_contact_name: userMeta?.emergency_contact_name ?? data?.emergency_contact_name ?? null,
+    emergency_contact_relation: userMeta?.emergency_contact_relation ?? data?.emergency_contact_relation ?? null,
+    emergency_contact_phone: userMeta?.emergency_contact_phone ?? data?.emergency_contact_phone ?? null,
+    emergency_contact_address: userMeta?.emergency_contact_address ?? data?.emergency_contact_address ?? null,
   };
 }
 
 export const getMyProfile = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<MyProfile> => {
-    const { data, error } = await context.supabase
+    const { data: profileRow, error } = await context.supabase
       .from("profiles")
       .select(PROFILE_SELECT)
       .eq("id", context.userId)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    return { ...mapProfile(data), id: context.userId };
+
+    let userMeta: any = {};
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(context.userId);
+      if (authUser?.user?.user_metadata) {
+        userMeta = authUser.user.user_metadata;
+      }
+    } catch (err) {
+      console.error("Failed to load user metadata for my profile:", err);
+    }
+
+    return { ...mapProfile(profileRow, userMeta), id: context.userId };
   });
 
 export const getEmployeeProfileById = createServerFn({ method: "GET" })
@@ -110,13 +118,25 @@ export const getEmployeeProfileById = createServerFn({ method: "GET" })
     const canView = roles.includes("admin") || roles.includes("sub_admin") || context.userId === data.id;
     if (!canView) throw new Error("Forbidden");
 
-    const { data: profile, error } = await context.supabase
+    const { data: profileRow, error } = await context.supabase
       .from("profiles")
       .select(PROFILE_SELECT)
       .eq("id", data.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    return { ...mapProfile(profile), id: data.id };
+
+    let userMeta: any = {};
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(data.id);
+      if (authUser?.user?.user_metadata) {
+        userMeta = authUser.user.user_metadata;
+      }
+    } catch (err) {
+      console.error("Failed to load user metadata for employee profile:", err);
+    }
+
+    return { ...mapProfile(profileRow, userMeta), id: data.id };
   });
 
 const updateInput = z.object({
@@ -161,50 +181,69 @@ export const updateMyProfile = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const targetId = data.targetId ?? context.userId;
 
-    // If editing someone else, require admin role
-    if (targetId !== context.userId) {
-      const { data: roleRows } = await context.supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", context.userId);
-      const roles = (roleRows ?? []).map((r: any) => r.role);
-      if (!roles.includes("admin") && !roles.includes("sub_admin")) {
-        throw new Error("Forbidden: admin only");
-      }
+    // Require admin or sub_admin role to update profile details
+    const { data: roleRows } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId);
+    const roles = (roleRows ?? []).map((r: any) => r.role);
+    if (!roles.includes("admin") && !roles.includes("sub_admin")) {
+      throw new Error("Forbidden: Profile editing is disabled for employees. Contact an administrator to update account details.");
     }
 
+    // 1. Update core fields in profiles table
     const { error } = await context.supabase
       .from("profiles")
       .update({
         full_name: data.fullName,
-        gender: data.gender || null,
-        date_of_birth: data.dateOfBirth || null,
-        mobile: data.mobile || null,
-        address: data.address || null,
-        city: data.city || null,
-        state: data.state || null,
-        pincode: data.pincode || null,
-        photo_url: data.photoUrl || null,
         job_title: data.jobTitle || null,
         department: data.department || null,
         staff_section: data.staffSection || "IT Team",
-        job_type: data.jobType || null,
-        joining_date: data.joiningDate || null,
-        work_location: data.workLocation || null,
-        salary: data.salary ?? null,
-        salary_type: data.salaryType || null,
-        bank_account: data.bankAccount || null,
-        pan: data.pan || null,
-        uan: data.uan || null,
-        pf_number: data.pfNumber || null,
-        experience: data.experience || null,
-        previous_company: data.previousCompany || null,
-        emergency_contact_name: data.emergencyContactName || null,
-        emergency_contact_relation: data.emergencyContactRelation || null,
-        emergency_contact_phone: data.emergencyContactPhone || null,
-        emergency_contact_address: data.emergencyContactAddress || null,
       })
       .eq("id", targetId);
     if (error) throw new Error(error.message);
+
+    // 2. Persist all profile & HR metadata via auth.admin updateUserById
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: existingUser } = await supabaseAdmin.auth.admin.getUserById(targetId);
+      const prevMeta = existingUser?.user?.user_metadata || {};
+
+      await supabaseAdmin.auth.admin.updateUserById(targetId, {
+        user_metadata: {
+          ...prevMeta,
+          full_name: data.fullName,
+          job_title: data.jobTitle || null,
+          department: data.department || null,
+          staff_section: data.staffSection || "IT Team",
+          gender: data.gender || null,
+          date_of_birth: data.dateOfBirth || null,
+          mobile: data.mobile || null,
+          address: data.address || null,
+          city: data.city || null,
+          state: data.state || null,
+          pincode: data.pincode || null,
+          photo_url: data.photoUrl || null,
+          job_type: data.jobType || null,
+          joining_date: data.joiningDate || null,
+          work_location: data.workLocation || null,
+          salary: data.salary ?? null,
+          salary_type: data.salaryType || null,
+          bank_account: data.bankAccount || null,
+          pan: data.pan || null,
+          uan: data.uan || null,
+          pf_number: data.pfNumber || null,
+          experience: data.experience || null,
+          previous_company: data.previousCompany || null,
+          emergency_contact_name: data.emergencyContactName || null,
+          emergency_contact_relation: data.emergencyContactRelation || null,
+          emergency_contact_phone: data.emergencyContactPhone || null,
+          emergency_contact_address: data.emergencyContactAddress || null,
+        },
+      });
+    } catch (err) {
+      console.error("Failed to update user_metadata in auth:", err);
+    }
+
     return { ok: true as const };
   });

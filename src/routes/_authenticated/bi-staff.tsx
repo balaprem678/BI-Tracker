@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import {
   Activity,
+  AlertCircle,
   ArrowRight,
   Briefcase,
   Building2,
@@ -25,6 +26,7 @@ import {
   Table as TableIcon,
   Timer,
   UserCheck,
+  UserCog,
   UserRound,
   Users,
   X,
@@ -473,13 +475,23 @@ function BiStaffPage() {
                         </button>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => setSelectedEmployeeId(m.id)}
-                          className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary"
-                        >
-                          View Full Details
-                          <ChevronRight className="size-3" />
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            to="/admin/employee/$id"
+                            params={{ id: m.id }}
+                            className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:bg-secondary hover:text-primary hover:border-primary/40"
+                            title="Edit employee account details"
+                          >
+                            <UserCog className="size-3" /> Edit Account
+                          </Link>
+                          <button
+                            onClick={() => setSelectedEmployeeId(m.id)}
+                            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground hover:bg-secondary"
+                          >
+                            View Full Details
+                            <ChevronRight className="size-3" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -520,10 +532,18 @@ function BiStaffPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-end border-t border-border pt-3">
+                  <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs">
+                    <Link
+                      to="/admin/employee/$id"
+                      params={{ id: m.id }}
+                      className="inline-flex items-center gap-1 font-medium text-muted-foreground hover:text-primary hover:underline"
+                      title="Edit employee account details"
+                    >
+                      <UserCog className="size-3" /> Edit Account
+                    </Link>
                     <button
                       onClick={() => setSelectedEmployeeId(m.id)}
-                      className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                      className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
                     >
                       View Details
                       <ArrowRight className="size-3" />
@@ -673,19 +693,51 @@ function EmployeeDetailsModal({
   onClose: () => void;
 }) {
   const getEmployeeAllDataFn = useServerFn(getEmployeeAllData);
-  const { data: fullData, isLoading } = useQuery({
+  const { data: fullData, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["employee-all-data", employeeId],
     queryFn: () => getEmployeeAllDataFn({ data: { employeeId } }),
   });
 
   const [activeTab, setActiveTab] = useState<"overview" | "shifts" | "logs" | "leaves">("overview");
 
-  if (isLoading || !fullData) {
+  if (isLoading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
         <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-xl text-center">
           <RefreshCw className="mx-auto size-6 animate-spin text-primary" />
           <p className="mt-2 text-sm text-muted-foreground">Loading complete employee record…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || !fullData) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+        <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl text-center space-y-4">
+          <div className="mx-auto grid size-12 place-items-center rounded-full bg-destructive/10 text-destructive">
+            <AlertCircle className="size-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-foreground">Failed to load employee record</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {error instanceof Error ? error.message : "An unexpected error occurred while fetching details."}
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              onClick={() => refetch()}
+              className="rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-md border border-border bg-secondary px-4 py-2 text-xs font-semibold text-secondary-foreground hover:bg-secondary/80"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -722,12 +774,22 @@ function EmployeeDetailsModal({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <X className="size-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/admin/employee/$id"
+              params={{ id: employeeId }}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 border border-primary/20 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+            >
+              <UserCog className="size-3.5" />
+              Edit Account
+            </Link>
+            <button
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Tabs */}
@@ -840,6 +902,30 @@ function EmployeeDetailsModal({
                           ? new Date(s.clockOut).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
                           : "Active Now"}
                       </p>
+                      <div className="mt-2 flex flex-col gap-1 text-[11px]">
+                        <div className="flex items-center gap-1.5 font-medium text-foreground">
+                          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                            Clock In Location
+                          </span>
+                          {s.clockInLocationName ? (
+                            <span>📍 {s.clockInLocationName}</span>
+                          ) : (
+                            <span className="italic text-muted-foreground/70">Not recorded</span>
+                          )}
+                        </div>
+                        {s.clockOut && (
+                          <div className="flex items-center gap-1.5 font-medium text-foreground">
+                            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                              Clock Out Location
+                            </span>
+                            {s.clockOutLocationName ? (
+                              <span>📍 {s.clockOutLocationName}</span>
+                            ) : (
+                              <span className="italic text-muted-foreground/70">Not recorded</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                       {s.note && <p className="mt-1 text-muted-foreground italic">"{s.note}"</p>}
                     </div>
                     <span className="font-mono font-semibold">{s.hours.toFixed(2)}h</span>

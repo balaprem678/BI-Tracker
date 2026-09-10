@@ -20,6 +20,7 @@ export type Employee = {
   staff_section: string | null;
   hourly_rate: number;
   is_active: boolean;
+  is_clocked_in: boolean;
   role: "admin" | "sub_admin" | "employee";
 };
 
@@ -27,14 +28,17 @@ export const listEmployees = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<Employee[]> => {
     await assertAdmin(context);
-    const [{ data: profiles, error }, { data: roles }] = await Promise.all([
+    const [{ data: profiles, error }, { data: roles }, { data: openShifts }] = await Promise.all([
       context.supabase
         .from("profiles")
         .select("id, email, full_name, job_title, department, staff_section, hourly_rate, is_active")
         .order("full_name", { ascending: true }),
       context.supabase.from("user_roles").select("user_id, role"),
+      context.supabase.from("shifts").select("user_id").is("clock_out", null),
     ]);
     if (error) throw new Error(error.message);
+
+    const openShiftUserIds = new Set((openShifts ?? []).map((s: any) => s.user_id));
     const adminIds = new Set(
       (roles ?? []).filter((r: any) => r.role === "admin").map((r: any) => r.user_id),
     );
@@ -45,6 +49,7 @@ export const listEmployees = createServerFn({ method: "GET" })
       ...p,
       staff_section: p.staff_section ?? "IT Team",
       hourly_rate: Number(p.hourly_rate ?? 0),
+      is_clocked_in: openShiftUserIds.has(p.id),
       role: adminIds.has(p.id) ? "admin" : subAdminIds.has(p.id) ? "sub_admin" : "employee",
     }));
   });
@@ -163,7 +168,7 @@ export const getHourlyReport = createServerFn({ method: "GET" })
         .select("id, full_name, department, staff_section, hourly_rate, is_active"),
       context.supabase
         .from("shifts")
-        .select("user_id, clock_in, clock_out")
+        .select("user_id, clock_in, clock_out, clock_in_lat, clock_in_lng, clock_in_location_name, clock_out_lat, clock_out_lng, clock_out_location_name")
         .gte("clock_in", startIso)
         .lte("clock_in", endIso),
       context.supabase
@@ -201,6 +206,10 @@ export const getHourlyReport = createServerFn({ method: "GET" })
             date: String(s.clock_in).slice(0, 10),
             clockIn: s.clock_in,
             clockOut: s.clock_out ?? null,
+            clockInLocation: s.clock_in_location_name ?? (s.clock_in_lat ? `${s.clock_in_lat}°, ${s.clock_in_lng}°` : null),
+            clockOutLocation: s.clock_out_location_name ?? (s.clock_out_lat ? `${s.clock_out_lat}°, ${s.clock_out_lng}°` : null),
+            clockInLat: s.clock_in_lat ?? null,
+            clockInLng: s.clock_in_lng ?? null,
             hours: s.clock_out
               ? Math.round(
                   ((new Date(s.clock_out).getTime() - new Date(s.clock_in).getTime()) /

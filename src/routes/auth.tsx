@@ -32,9 +32,15 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
     supabase.auth.getSession().then(({ data }: { data: any }) => {
-      if (data.session) navigate({ to: "/dashboard", replace: true });
+      if (mounted && data.session) {
+        setTimeout(() => navigate({ to: "/dashboard", replace: true }), 0);
+      }
     });
+    return () => {
+      mounted = false;
+    };
   }, [navigate]);
 
   async function performLogin(loginIdentifier: string, loginPass: string) {

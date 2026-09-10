@@ -79,7 +79,13 @@ function ProjectPage() {
 
   // Tab & View Controls
   const [activeTab, setActiveTab] = useState<"projects" | "monitoring" | "reports">("projects");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("bi_tracker_project_view_mode");
+      if (saved === "list" || saved === "grid") return saved;
+    }
+    return "grid";
+  });
 
   // Filter States
   const [startDate, setStartDate] = useState(weekAgo);
@@ -114,13 +120,7 @@ function ProjectPage() {
   const [updateStatus, setUpdateStatus] = useState<"Not Started" | "In Progress" | "Completed" | "Delayed">("In Progress");
   const [updatePercent, setUpdatePercent] = useState<number>(0);
 
-  // Load View Mode Preference
-  useEffect(() => {
-    const saved = localStorage.getItem("bi_tracker_project_view_mode");
-    if (saved === "list" || saved === "grid") {
-      setViewMode(saved);
-    }
-  }, []);
+
 
   const handleToggleViewMode = (mode: "grid" | "list") => {
     setViewMode(mode);

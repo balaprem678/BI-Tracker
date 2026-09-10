@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
@@ -25,6 +25,7 @@ import {
   Table as TableIcon,
   Timer,
   UserCheck,
+  UserCog,
   UserRound,
   Users,
   X,
@@ -469,15 +470,26 @@ function TeamPage() {
                           </button>
                         </td>
                         <td className="px-4 py-3.5 text-right">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedEmployeeId(member.id);
-                            }}
-                            className="inline-flex items-center gap-1 rounded-md bg-primary/10 border border-primary/20 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
-                          >
-                            View All Data <ExternalLink className="size-3" />
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <Link
+                              to="/admin/employee/$id"
+                              params={{ id: member.id }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-secondary hover:text-primary hover:border-primary/40"
+                              title="Edit employee account details"
+                            >
+                              <UserCog className="size-3.5" /> Edit Account
+                            </Link>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedEmployeeId(member.id);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-md bg-primary/10 border border-primary/20 px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+                            >
+                              View All Data <ExternalLink className="size-3" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -652,17 +664,27 @@ function TeamPage() {
                             {r.shifts.map((s, i) => (
                               <li
                                 key={`${r.userId}-shift-${i}`}
-                                className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-xs"
+                                className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 text-xs"
                               >
                                 <span className="stat-number font-medium text-foreground w-24">
                                   {s.date}
                                 </span>
-                                <span className="text-muted-foreground">
-                                  In {new Date(s.clockIn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · Out{" "}
-                                  {s.clockOut
-                                    ? new Date(s.clockOut).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                                    : "in progress"}
-                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-muted-foreground">
+                                    In {new Date(s.clockIn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · Out{" "}
+                                    {s.clockOut
+                                      ? new Date(s.clockOut).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                      : "in progress"}
+                                  </span>
+                                  {s.clockInLocationName && (
+                                    <p className="text-[11px] text-foreground/80 flex items-center gap-1 font-medium mt-0.5">
+                                      📍 {s.clockInLocationName}
+                                      {s.clockOutLocationName && s.clockOutLocationName !== s.clockInLocationName && (
+                                        <span className="text-muted-foreground font-normal"> (Out: {s.clockOutLocationName})</span>
+                                      )}
+                                    </p>
+                                  )}
+                                </div>
                                 <span className="stat-number ml-auto font-semibold text-primary">
                                   {s.clockOut ? `${s.hours.toFixed(2)} h` : "in progress"}
                                 </span>
@@ -840,9 +862,21 @@ function EmployeeCard({
               {member.todayHoursWorked.toFixed(1)}h
             </span>
           </div>
-          <span className="inline-flex items-center gap-1 font-medium text-primary group-hover:underline">
-            All data <ExternalLink className="size-3" />
-          </span>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/admin/employee/$id"
+              params={{ id: member.id }}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 font-medium text-muted-foreground hover:text-primary hover:underline"
+              title="Edit employee account details"
+            >
+              <UserCog className="size-3" /> Edit
+            </Link>
+            <span className="text-muted-foreground/30">•</span>
+            <span className="inline-flex items-center gap-1 font-medium text-primary group-hover:underline">
+              All data <ExternalLink className="size-3" />
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -907,13 +941,23 @@ function EmployeeAllDataModal({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="rounded-md border border-border p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          >
-            <X className="size-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/admin/employee/$id"
+              params={{ id: employeeId }}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 border border-primary/20 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+            >
+              <UserCog className="size-3.5" />
+              Edit Account
+            </Link>
+            <button
+              onClick={onClose}
+              aria-label="Close dialog"
+              className="rounded-md border border-border p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
+              <X className="size-5" />
+            </button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -1168,6 +1212,7 @@ function EmployeeAllDataModal({
                               <th className="px-4 py-3">Date</th>
                               <th className="px-4 py-3">Clock In</th>
                               <th className="px-4 py-3">Clock Out</th>
+                              <th className="px-4 py-3">Location (City, State, Country)</th>
                               <th className="px-4 py-3">Duration</th>
                               <th className="px-4 py-3">Notes</th>
                             </tr>
@@ -1196,6 +1241,32 @@ function EmployeeAllDataModal({
                                       In progress
                                     </span>
                                   )}
+                                </td>
+                                <td className="px-4 py-3 text-foreground">
+                                  <div className="flex flex-col gap-1 text-xs">
+                                    <div className="flex items-center gap-1.5 font-medium text-foreground">
+                                      <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                                        In
+                                      </span>
+                                      {s.clockInLocationName ? (
+                                        <span>📍 {s.clockInLocationName}</span>
+                                      ) : (
+                                        <span className="text-[11px] italic text-muted-foreground">Not recorded</span>
+                                      )}
+                                    </div>
+                                    {s.clockOut && (
+                                      <div className="flex items-center gap-1.5 font-medium text-foreground">
+                                        <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                                          Out
+                                        </span>
+                                        {s.clockOutLocationName ? (
+                                          <span>📍 {s.clockOutLocationName}</span>
+                                        ) : (
+                                          <span className="text-[11px] italic text-muted-foreground">Not recorded</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="stat-number px-4 py-3 font-semibold text-primary">
                                   {s.hours.toFixed(2)}h

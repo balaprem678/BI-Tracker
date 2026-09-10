@@ -16,12 +16,20 @@ import {
   ChevronRight,
   FolderCheck,
   RotateCcw,
+  MapPin,
+  Navigation,
+  ExternalLink,
+  ShieldAlert,
+  Coffee,
+  X,
 } from "lucide-react";
 import { AppShell, Panel, Stat } from "@/components/app-shell";
+import { getCurrentLocation } from "@/lib/location";
 import {
   clockIn,
   clockOut,
   getMyShifts,
+  getShiftAnalyticsToday,
   getSessionInfo,
 } from "@/lib/tracker.functions";
 import {
@@ -89,7 +97,6 @@ function Dashboard() {
   const shiftsFn = useServerFn(getMyShifts);
   const clockInFn = useServerFn(clockIn);
   const clockOutFn = useServerFn(clockOut);
-
   // Project tracker server functions
   const myProjectsFn = useServerFn(getMyProjects);
   const mySessionsFn = useServerFn(getMyProjectSessions);
@@ -97,10 +104,13 @@ function Dashboard() {
   const pauseSessionFn = useServerFn(pauseProjectSession);
   const endProjectFn = useServerFn(endProjectForToday);
   const autoStopMidnightFn = useServerFn(autoStopMidnightSessions);
+  const shiftAnalyticsFn = useServerFn(getShiftAnalyticsToday);
 
   const today = todayIso();
   const [selectedDate, setSelectedDate] = useState(today);
   const [currentTimestamp, setCurrentTimestamp] = useState(Date.now());
+  const [locationErrorModal, setLocationErrorModal] = useState<string | null>(null);
+  const [isAcquiringLocation, setIsAcquiringLocation] = useState(false);
 
   // Ending project modal state
   const [endingSession, setEndingSession] = useState<{
@@ -114,12 +124,19 @@ function Dashboard() {
 
   const { data: session } = useQuery({ queryKey: ["session"], queryFn: () => sessionFn({}) });
   const { data: shifts } = useQuery({ queryKey: ["my-shifts"], queryFn: () => shiftsFn({}) });
+  const { data: shiftAnalytics } = useQuery({
+    queryKey: ["shift-analytics-today"],
+    queryFn: () => shiftAnalyticsFn({}),
+    refetchInterval: 5000,
+  });
 
   // Redirect admin to admin portal
   useEffect(() => {
-    if (session?.role === "admin") {
+    if (session?.role !== "admin") return;
+    const timer = setTimeout(() => {
       navigate({ to: "/admin", replace: true });
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [session, navigate]);
 
   const { data: projects = [] } = useQuery({
@@ -150,16 +167,60 @@ function Dashboard() {
     return () => clearInterval(interval);
   }, [autoStopMidnightFn, qc]);
 
-  // Mutations
+  // Mandatory Geolocation Shift Mutations
   const clockMutation = useMutation({
-    mutationFn: async (kind: "in" | "out") =>
-      kind === "in" ? clockInFn({}) : clockOutFn({ data: {} }),
-    onSuccess: (res) => {
-      res.ok ? toast.success(res.message) : toast.error(res.message);
-      qc.invalidateQueries({ queryKey: ["my-shifts"] });
+    mutationFn: async (payload: { kind: "in" | "out"; latitude: number; longitude: number; locationName: string }) => {
+      if (payload.kind === "in") {
+        return clockInFn({
+          data: {
+            latitude: payload.latitude,
+            longitude: payload.longitude,
+            locationName: payload.locationName,
+          },
+        });
+      } else {
+        return clockOutFn({
+          data: {
+            latitude: payload.latitude,
+            longitude: payload.longitude,
+            locationName: payload.locationName,
+          },
+        });
+      }
     },
-    onError: () => toast.error("Could not update shift."),
+    onSuccess: (res) => {
+      if (res.ok) {
+        toast.success(res.message);
+        setLocationErrorModal(null);
+      } else {
+        toast.error(res.message);
+      }
+      qc.invalidateQueries({ queryKey: ["my-shifts"] });
+      qc.invalidateQueries({ queryKey: ["shift-analytics-today"] });
+    },
+    onError: (err: any) => toast.error(err.message || "Could not update shift status."),
   });
+
+  const triggerShiftToggle = async (kind: "in" | "out") => {
+    setIsAcquiringLocation(true);
+    setLocationErrorModal(null);
+    try {
+      toast.info("Acquiring GPS location for shift verification...");
+      const loc = await getCurrentLocation();
+      setIsAcquiringLocation(false);
+      clockMutation.mutate({
+        kind,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        locationName: loc.locationName,
+      });
+    } catch (err: any) {
+      setIsAcquiringLocation(false);
+      const errMsg = err.message || "Location access failed.";
+      setLocationErrorModal(errMsg);
+      toast.error("Location Access Required: " + errMsg);
+    }
+  };
 
   const startMutation = useMutation({
     mutationFn: (p: { projectId: string; projectName: string }) =>
@@ -171,6 +232,7 @@ function Dashboard() {
         toast.error(res.message);
       }
       qc.invalidateQueries({ queryKey: ["my-project-sessions", selectedDate] });
+      qc.invalidateQueries({ queryKey: ["shift-analytics-today"] });
     },
     onError: (err: any) => toast.error(err.message || "Failed to start project session."),
   });
@@ -180,6 +242,7 @@ function Dashboard() {
     onSuccess: (res) => {
       toast.info(res.message);
       qc.invalidateQueries({ queryKey: ["my-project-sessions", selectedDate] });
+      qc.invalidateQueries({ queryKey: ["shift-analytics-today"] });
     },
     onError: (err: any) => toast.error(err.message || "Failed to pause project session."),
   });
@@ -201,6 +264,7 @@ function Dashboard() {
       setTaskSummary("");
       setFinalStatus("Completed");
       qc.invalidateQueries({ queryKey: ["my-project-sessions", selectedDate] });
+      qc.invalidateQueries({ queryKey: ["shift-analytics-today"] });
     },
     onError: (err: any) => toast.error(err.message || "Failed to end project for today."),
   });
@@ -215,7 +279,7 @@ function Dashboard() {
     const map = new Map<
       string,
       {
-        session?: ProjectSession;
+        session?: ProjectSession | undefined;
         isRunning: boolean;
         isDailyEnded: boolean;
         currentSeconds: number;
@@ -224,30 +288,25 @@ function Dashboard() {
     >();
 
     for (const p of projects) {
-      const sess = sessions.find((s) => s.project_id === p.id);
-      if (!sess) {
-        map.set(p.id, {
-          isRunning: false,
-          isDailyEnded: false,
-          currentSeconds: 0,
-          status: "Not Started",
-        });
-      } else {
-        let sec = sess.duration_seconds || 0;
-        const isRunning = !sess.end_time && sess.status === "In Progress" && !sess.daily_ended;
-        if (isRunning && isToday) {
-          const startMs = new Date(sess.start_time).getTime();
-          const elapsed = isNaN(startMs) ? 0 : Math.max(0, Math.floor((currentTimestamp - startMs) / 1000));
-          sec += elapsed;
-        }
-        map.set(p.id, {
-          session: sess,
-          isRunning,
-          isDailyEnded: sess.daily_ended,
-          currentSeconds: sec,
-          status: sess.status,
-        });
+      const userSessions = sessions.filter((s) => s.project_id === p.id);
+      const active = userSessions.find((s) => !s.end_time && s.status === "In Progress" && !s.daily_ended);
+      const isDailyEnded = userSessions.some((s) => s.daily_ended);
+
+      let accumulated = userSessions.reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
+
+      if (active && isToday) {
+        const startMs = new Date(active.start_time).getTime();
+        const liveSecs = Math.max(0, Math.floor((currentTimestamp - startMs) / 1000));
+        accumulated += liveSecs;
       }
+
+      map.set(p.id, {
+        session: active || userSessions[0],
+        isRunning: Boolean(active),
+        isDailyEnded,
+        currentSeconds: accumulated,
+        status: isDailyEnded ? "Completed Today" : active ? "In Progress" : p.status || "Not Started",
+      });
     }
     return map;
   }, [projects, sessions, currentTimestamp, isToday]);
@@ -266,6 +325,11 @@ function Dashboard() {
   }, [sessions]);
 
   const openShift = shifts?.find((s) => !s.clock_out);
+  const liveShiftSeconds = useMemo(() => {
+    if (!openShift) return 0;
+    const start = new Date(openShift.clock_in).getTime();
+    return Math.max(0, Math.floor((currentTimestamp - start) / 1000));
+  }, [openShift, currentTimestamp]);
 
   if (!session) {
     return (
@@ -297,50 +361,85 @@ function Dashboard() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex flex-col items-end text-xs text-muted-foreground mr-2">
-            <span>Shift Status</span>
-            <span className="font-semibold text-foreground">
-              {openShift ? "Clocked In" : "Clocked Out"}
-            </span>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-col items-end text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span>Shift Status:</span>
+              <span className={`font-semibold ${openShift ? "text-emerald-500" : "text-amber-500"}`}>
+                {openShift ? "Clocked In" : "Clocked Out"}
+              </span>
+            </div>
+            {openShift && (
+              <div className="mt-1 flex items-center gap-2 text-[11px]">
+                <span className="font-mono text-foreground font-semibold">
+                  Shift: {formatSeconds(liveShiftSeconds)}
+                </span>
+                {openShift.clock_in_location_name && (
+                  <a
+                    href={`https://maps.google.com/?q=${openShift.clock_in_lat ?? ""},${openShift.clock_in_lng ?? ""}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                    title="View Clock-In GPS Location"
+                  >
+                    <MapPin className="size-3" />
+                    {openShift.clock_in_location_name}
+                    <ExternalLink className="size-3" />
+                  </a>
+                )}
+              </div>
+            )}
           </div>
+
           <button
-            onClick={() => clockMutation.mutate(openShift ? "out" : "in")}
-            disabled={clockMutation.isPending}
+            onClick={() => triggerShiftToggle(openShift ? "out" : "in")}
+            disabled={isAcquiringLocation || clockMutation.isPending}
             className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 shadow-sm ${
               openShift
                 ? "border border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20"
                 : "glow-primary bg-primary text-primary-foreground hover:brightness-110"
             }`}
           >
-            {openShift ? <Pause className="size-4" /> : <Play className="size-4" />}
-            {openShift ? "Clock Out Shift" : "Clock In Shift"}
+            {isAcquiringLocation ? (
+              <Navigation className="size-4 animate-spin" />
+            ) : openShift ? (
+              <Pause className="size-4" />
+            ) : (
+              <Play className="size-4" />
+            )}
+            {isAcquiringLocation
+              ? "Verifying GPS Location…"
+              : openShift
+                ? "Clock Out Shift"
+                : "Clock In Shift"}
           </button>
         </div>
       </div>
 
-      {/* KPI Stats Cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {/* KPI Stats Cards (Separate Shift Hours vs Project Hours) */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <Stat
+          label="Shift Hours (Today)"
+          value={shiftAnalytics?.todayShiftHours ?? 0.00}
+          suffix="h"
+        />
+        <Stat
+          label="Project Hours (Today)"
+          value={formatHoursDecimal(totalSecondsToday)}
+          suffix="h"
+        />
+        <Stat
+          label="Meetings & General"
+          value={shiftAnalytics?.unallocatedHours ?? 0.00}
+          suffix="h"
+        />
         <Stat
           label="Active Project"
           value={runningSession ? runningSession.project_name : "Idle"}
           suffix={runningSession ? " (Running)" : ""}
         />
         <Stat
-          label="Live Active Timer"
-          value={
-            runningSession
-              ? formatSeconds(projectLiveState.get(runningSession.project_id)?.currentSeconds || 0)
-              : "00:00:00"
-          }
-        />
-        <Stat
-          label="Total Project Hours"
-          value={formatHoursDecimal(totalSecondsToday)}
-          suffix="h"
-        />
-        <Stat
-          label="Completed Today"
+          label="Completed Projects"
           value={`${completedProjectsCount} / ${projects.length}`}
         />
       </div>
@@ -678,6 +777,64 @@ function Dashboard() {
                 className="rounded-lg glow-primary bg-primary px-5 py-2 text-xs font-bold text-primary-foreground hover:brightness-110 disabled:opacity-50"
               >
                 {endProjectMutation.isPending ? "Saving…" : "Save & End for Today"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL: LOCATION PERMISSION REQUIRED WARNING
+         ======================================================== */}
+      {locationErrorModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-destructive/30 bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-destructive/15 text-destructive">
+                  <ShieldAlert className="size-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-foreground">Location Access Required</h3>
+                  <p className="text-xs text-muted-foreground">Mandatory Geolocation Verification</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLocationErrorModal(null)}
+                className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-xs text-foreground/90 space-y-2">
+              <p className="font-semibold text-destructive">
+                Location permissions must be enabled to Clock In or Clock Out.
+              </p>
+              <p className="text-muted-foreground">
+                {locationErrorModal}
+              </p>
+              <div className="pt-2 text-[11px] text-muted-foreground border-t border-border/40">
+                <span className="font-semibold text-foreground">How to enable:</span> Click the lock/tune icon next to the URL bar in your browser, set <strong>Location</strong> permission to <strong>Allow</strong>, and click retry.
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setLocationErrorModal(null)}
+                className="rounded-lg border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                Dismiss
+              </button>
+              <button
+                type="button"
+                onClick={() => triggerShiftToggle(openShift ? "out" : "in")}
+                className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-xs font-bold text-primary-foreground hover:brightness-110 shadow-sm"
+              >
+                <Navigation className="size-3.5" />
+                Allow Location & Retry
               </button>
             </div>
           </div>

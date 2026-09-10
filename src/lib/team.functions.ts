@@ -36,6 +36,12 @@ export type EmployeeShift = {
   clockOut: string | null;
   hours: number;
   note: string | null;
+  clockInLat?: number | null;
+  clockInLng?: number | null;
+  clockInLocationName?: string | null;
+  clockOutLat?: number | null;
+  clockOutLng?: number | null;
+  clockOutLocationName?: string | null;
 };
 
 export type EmployeeHourlyLog = {
@@ -113,6 +119,12 @@ export type TeamHourlyReportRow = {
     clockOut: string | null;
     hours: number;
     note: string | null;
+    clockInLocationName?: string | null;
+    clockOutLocationName?: string | null;
+    clockInLat?: number | null;
+    clockInLng?: number | null;
+    clockOutLat?: number | null;
+    clockOutLng?: number | null;
   }[];
   logs: {
     log_date: string;
@@ -245,7 +257,6 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
     const [
       { data: profile, error: pError },
       { data: roles },
-      { data: shifts, error: sError },
       { data: logs, error: lError },
       { data: leaves, error: lvError },
     ] = await Promise.all([
@@ -255,11 +266,6 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
         .eq("id", employeeId)
         .maybeSingle(),
       context.supabase.from("user_roles").select("role").eq("user_id", employeeId),
-      context.supabase
-        .from("shifts")
-        .select("id, clock_in, clock_out, note, created_at")
-        .eq("user_id", employeeId)
-        .order("clock_in", { ascending: false }),
       context.supabase
         .from("hourly_logs")
         .select("id, log_date, hour_slot, start_time, end_time, project, task, category, status, created_at")
@@ -274,10 +280,29 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
     ]);
 
     if (pError) throw new Error(pError.message);
-    if (sError) throw new Error(sError.message);
     if (lError) throw new Error(lError.message);
     if (lvError) throw new Error(lvError.message);
     if (!profile) throw new Error("Employee not found");
+
+    let shifts: any[] | null = null;
+    const shiftRes = await context.supabase
+      .from("shifts")
+      .select("id, clock_in, clock_out, note, clock_in_lat, clock_in_lng, clock_in_location_name, clock_out_lat, clock_out_lng, clock_out_location_name, created_at")
+      .eq("user_id", employeeId)
+      .order("clock_in", { ascending: false });
+
+    if (shiftRes.error) {
+      console.warn("Location shift select failed in getEmployeeAllData, executing fallback query:", shiftRes.error.message);
+      const fallbackRes = await context.supabase
+        .from("shifts")
+        .select("id, clock_in, clock_out, note, created_at")
+        .eq("user_id", employeeId)
+        .order("clock_in", { ascending: false });
+      if (fallbackRes.error) throw new Error(fallbackRes.error.message);
+      shifts = fallbackRes.data;
+    } else {
+      shifts = shiftRes.data;
+    }
 
     const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
     const isSubAdmin = (roles ?? []).some((r: any) => r.role === "sub_admin");
@@ -312,12 +337,28 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
         todayHours += durationHours;
       }
 
+      let clockInLoc = s.clock_in_location_name ?? null;
+      let clockOutLoc = s.clock_out_location_name ?? null;
+
+      if (!clockInLoc && s.note && s.note.includes("📍")) {
+        const inMatch = s.note.match(/📍 Location:\s*([^|;\(\)]+)/);
+        if (inMatch) clockInLoc = inMatch[1].trim();
+        const outMatch = s.note.match(/📍 Out:\s*([^|;\(\)]+)/);
+        if (outMatch) clockOutLoc = outMatch[1].trim();
+      }
+
       return {
         id: s.id,
         clockIn: s.clock_in,
         clockOut: s.clock_out ?? null,
         hours: Math.round(durationHours * 100) / 100,
         note: s.note ?? null,
+        clockInLat: s.clock_in_lat ?? null,
+        clockInLng: s.clock_in_lng ?? null,
+        clockInLocationName: clockInLoc,
+        clockOutLat: s.clock_out_lat ?? null,
+        clockOutLng: s.clock_out_lng ?? null,
+        clockOutLocationName: clockOutLoc,
       };
     });
 
@@ -419,18 +460,12 @@ export const getTeamHourlyReport = createServerFn({ method: "GET" })
     const [
       { data: profiles },
       { data: roles },
-      { data: shifts },
       { data: logs },
     ] = await Promise.all([
       context.supabase
         .from("profiles")
         .select("id, full_name, email, job_title, department, staff_section, hourly_rate, is_active"),
       context.supabase.from("user_roles").select("user_id, role"),
-      context.supabase
-        .from("shifts")
-        .select("user_id, clock_in, clock_out, note")
-        .gte("clock_in", startIso)
-        .lte("clock_in", endIso),
       context.supabase
         .from("hourly_logs")
         .select("user_id, hour_slot, task, category, log_date, project, start_time, end_time, status")
@@ -439,6 +474,25 @@ export const getTeamHourlyReport = createServerFn({ method: "GET" })
         .order("log_date", { ascending: true })
         .order("hour_slot", { ascending: true }),
     ]);
+
+    let shifts: any[] = [];
+    const shiftRes = await context.supabase
+      .from("shifts")
+      .select("user_id, clock_in, clock_out, note, clock_in_lat, clock_in_lng, clock_in_location_name, clock_out_lat, clock_out_lng, clock_out_location_name")
+      .gte("clock_in", startIso)
+      .lte("clock_in", endIso);
+
+    if (shiftRes.error) {
+      console.warn("Location shift select failed in getTeamHourlyReport, executing fallback query:", shiftRes.error.message);
+      const fallbackRes = await context.supabase
+        .from("shifts")
+        .select("user_id, clock_in, clock_out, note")
+        .gte("clock_in", startIso)
+        .lte("clock_in", endIso);
+      shifts = fallbackRes.data ?? [];
+    } else {
+      shifts = shiftRes.data ?? [];
+    }
 
     const adminIds = new Set(
       (roles ?? []).filter((r: any) => r.role === "admin").map((r: any) => r.user_id),
@@ -480,21 +534,39 @@ export const getTeamHourlyReport = createServerFn({ method: "GET" })
         loggedHours: userLogs.length,
         cost: Math.round(hours * rate * 100) / 100,
         shifts: userShifts
-          .map((s: any) => ({
-            date: String(s.clock_in).slice(0, 10),
-            clockIn: s.clock_in,
-            clockOut: s.clock_out ?? null,
-            hours: s.clock_out
-              ? Math.round(
-                  ((new Date(s.clock_out).getTime() - new Date(s.clock_in).getTime()) /
-                    3_600_000) *
-                    100,
-                ) / 100
-              : Math.round(
-                  ((Date.now() - new Date(s.clock_in).getTime()) / 3_600_000) * 100,
-                ) / 100,
-            note: s.note ?? null,
-          }))
+          .map((s: any) => {
+            let clockInLoc = s.clock_in_location_name ?? null;
+            let clockOutLoc = s.clock_out_location_name ?? null;
+
+            if (!clockInLoc && s.note && s.note.includes("📍")) {
+              const inMatch = s.note.match(/📍 Location:\s*([^|;\(\)]+)/);
+              if (inMatch) clockInLoc = inMatch[1].trim();
+              const outMatch = s.note.match(/📍 Out:\s*([^|;\(\)]+)/);
+              if (outMatch) clockOutLoc = outMatch[1].trim();
+            }
+
+            return {
+              date: String(s.clock_in).slice(0, 10),
+              clockIn: s.clock_in,
+              clockOut: s.clock_out ?? null,
+              hours: s.clock_out
+                ? Math.round(
+                    ((new Date(s.clock_out).getTime() - new Date(s.clock_in).getTime()) /
+                      3_600_000) *
+                      100,
+                  ) / 100
+                : Math.round(
+                    ((Date.now() - new Date(s.clock_in).getTime()) / 3_600_000) * 100,
+                  ) / 100,
+              note: s.note ?? null,
+              clockInLocationName: clockInLoc,
+              clockOutLocationName: clockOutLoc,
+              clockInLat: s.clock_in_lat ?? null,
+              clockInLng: s.clock_in_lng ?? null,
+              clockOutLat: s.clock_out_lat ?? null,
+              clockOutLng: s.clock_out_lng ?? null,
+            };
+          })
           .sort((a: any, b: any) => (a.clockIn < b.clockIn ? 1 : -1)),
         logs: userLogs.map((l: any) => ({
           log_date: l.log_date,

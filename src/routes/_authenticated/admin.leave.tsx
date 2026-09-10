@@ -98,9 +98,11 @@ function AdminLeavePage() {
 
   // Role Protection: Only Admin can access
   useEffect(() => {
-    if (session && session.role !== "admin") {
+    if (!session || session.role === "admin") return;
+    const timer = setTimeout(() => {
       navigate({ to: "/dashboard", replace: true });
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [session, navigate]);
 
   const { data: leaveData, isLoading } = useQuery({

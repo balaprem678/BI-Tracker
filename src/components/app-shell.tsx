@@ -380,24 +380,44 @@ export function AppShell({
                 </div>
               )}
 
-              {/* USER PROFILE BUTTON */}
-              <Link
-                to="/profile"
-                className="flex min-w-0 items-center gap-3 rounded-md border border-border px-2 py-1.5 transition-colors hover:bg-secondary"
-              >
-                <div className="hidden min-w-0 text-right sm:block">
-                  <p className="truncate text-sm leading-tight">
-                    {session.fullName || session.email}
-                  </p>
-                  <p className="text-xs uppercase tracking-widest text-primary">
-                    {session.role === "sub_admin" ? "SUB ADMIN" : session.role}
-                  </p>
+              {/* USER PROFILE BUTTON / BADGE */}
+              {session.role === "employee" ? (
+                <Link
+                  to="/profile"
+                  title="My Profile"
+                  className="flex min-w-0 items-center gap-3 rounded-md border border-border px-2 py-1.5 transition-colors hover:bg-secondary"
+                >
+                  <div className="hidden min-w-0 text-right sm:block">
+                    <p className="truncate text-sm leading-tight">
+                      {session.fullName || session.email}
+                    </p>
+                    <p className="text-xs uppercase tracking-widest text-primary">
+                      {session.role}
+                    </p>
+                  </div>
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                    {initials}
+                  </span>
+                  <UserRound className="size-4 shrink-0 text-muted-foreground sm:hidden" />
+                </Link>
+              ) : (
+                <div
+                  title={`${session.fullName || session.email} (${session.role === "sub_admin" ? "Sub Admin" : "Admin"})`}
+                  className="flex min-w-0 items-center gap-3 rounded-md border border-border bg-card/60 px-2.5 py-1.5"
+                >
+                  <div className="hidden min-w-0 text-right sm:block">
+                    <p className="truncate text-sm font-medium leading-tight">
+                      {session.fullName || session.email}
+                    </p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-primary">
+                      {session.role === "sub_admin" ? "SUB ADMIN" : "ADMIN"}
+                    </p>
+                  </div>
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                    {initials}
+                  </span>
                 </div>
-                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                  {initials}
-                </span>
-                <UserRound className="size-4 shrink-0 text-muted-foreground sm:hidden" />
-              </Link>
+              )}
             </div>
           </div>
         </header>
@@ -440,10 +460,12 @@ export function Stat({
   label,
   value,
   suffix,
+  breakdown,
 }: {
   label: string;
   value: string | number;
   suffix?: string;
+  breakdown?: React.ReactNode;
 }) {
   return (
     <div className="panel p-5">
@@ -452,6 +474,7 @@ export function Stat({
         {value}
         {suffix && <span className="ml-1 text-base text-muted-foreground">{suffix}</span>}
       </p>
+      {breakdown && <div className="mt-2.5 text-xs font-medium text-muted-foreground">{breakdown}</div>}
     </div>
   );
 }

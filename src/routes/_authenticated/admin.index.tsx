@@ -26,6 +26,20 @@ export const Route = createFileRoute("/_authenticated/admin/")({
   component: AdminPanel,
 });
 
+function SectionBreakdown({ itCount, biCount }: { itCount: number; biCount: number }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+      <span>
+        IT Team: <strong className="font-semibold text-foreground">{itCount}</strong>
+      </span>
+      <span className="text-muted-foreground/40">•</span>
+      <span>
+        BI Staff: <strong className="font-semibold text-foreground">{biCount}</strong>
+      </span>
+    </div>
+  );
+}
+
 function AdminPanel() {
   const qc = useQueryClient();
   const sessionFn = useServerFn(getSessionInfo);
@@ -45,7 +59,11 @@ function AdminPanel() {
   });
 
   const { data: session } = useQuery({ queryKey: ["session"], queryFn: () => sessionFn({}) });
-  const { data: employees } = useQuery({ queryKey: ["employees"], queryFn: () => listFn({}) });
+  const { data: employees } = useQuery({
+    queryKey: ["employees"],
+    queryFn: () => listFn({}),
+    refetchInterval: 5000,
+  });
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -112,9 +130,20 @@ function AdminPanel() {
     );
   }
 
-  const totalEmployees = employees?.length ?? 0;
-  const activeEmployees = (employees ?? []).filter((e) => e.is_active).length;
-  const totalAdmins = (employees ?? []).filter((e) => e.role === "admin" || e.role === "sub_admin").length;
+  const allList = employees ?? [];
+  const totalEmployees = allList.length;
+  const totalIt = allList.filter((e) => e.staff_section !== "BI Staff").length;
+  const totalBi = allList.filter((e) => e.staff_section === "BI Staff").length;
+
+  const clockedInEmployees = allList.filter((e) => e.is_clocked_in);
+  const activeLoginsTotal = clockedInEmployees.length;
+  const activeIt = clockedInEmployees.filter((e) => e.staff_section !== "BI Staff").length;
+  const activeBi = clockedInEmployees.filter((e) => e.staff_section === "BI Staff").length;
+
+  const adminEmployees = allList.filter((e) => e.role === "admin" || e.role === "sub_admin");
+  const totalAdmins = adminEmployees.length;
+  const adminIt = adminEmployees.filter((e) => e.staff_section !== "BI Staff").length;
+  const adminBi = adminEmployees.filter((e) => e.staff_section === "BI Staff").length;
 
   return (
     <AppShell session={session}>
@@ -136,9 +165,21 @@ function AdminPanel() {
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
-        <Stat label="Total issued accounts" value={totalEmployees} />
-        <Stat label="Active logins" value={activeEmployees} />
-        <Stat label="Administrators & Sub Admins" value={totalAdmins} />
+        <Stat
+          label="Total issued accounts"
+          value={totalEmployees}
+          breakdown={<SectionBreakdown itCount={totalIt} biCount={totalBi} />}
+        />
+        <Stat
+          label="Active logins"
+          value={activeLoginsTotal}
+          breakdown={<SectionBreakdown itCount={activeIt} biCount={activeBi} />}
+        />
+        <Stat
+          label="Administrators & Sub Admins"
+          value={totalAdmins}
+          breakdown={<SectionBreakdown itCount={adminIt} biCount={adminBi} />}
+        />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_1fr]">

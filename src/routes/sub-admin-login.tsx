@@ -32,9 +32,15 @@ function SubAdminLoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
     supabase.auth.getSession().then(({ data }: { data: any }) => {
-      if (data.session) navigate({ to: "/project", replace: true });
+      if (mounted && data.session) {
+        setTimeout(() => navigate({ to: "/project", replace: true }), 0);
+      }
     });
+    return () => {
+      mounted = false;
+    };
   }, [navigate]);
 
   async function performLogin(loginIdentifier: string, loginPass: string) {

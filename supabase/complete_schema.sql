@@ -60,9 +60,22 @@ CREATE TABLE IF NOT EXISTS public.shifts (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   clock_in TIMESTAMPTZ NOT NULL DEFAULT now(),
   clock_out TIMESTAMPTZ,
+  clock_in_lat NUMERIC,
+  clock_in_lng NUMERIC,
+  clock_in_location_name TEXT,
+  clock_out_lat NUMERIC,
+  clock_out_lng NUMERIC,
+  clock_out_location_name TEXT,
   note TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS clock_in_lat NUMERIC;
+ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS clock_in_lng NUMERIC;
+ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS clock_in_location_name TEXT;
+ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS clock_out_lat NUMERIC;
+ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS clock_out_lng NUMERIC;
+ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS clock_out_location_name TEXT;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.shifts TO authenticated;
 GRANT ALL ON public.shifts TO service_role;

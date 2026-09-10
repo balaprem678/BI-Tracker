@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
@@ -13,6 +13,7 @@ import {
   Camera,
   Eye,
   EyeOff,
+  ShieldAlert,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionInfo } from "@/lib/tracker.functions";
@@ -86,7 +87,7 @@ function Field({
         type={type}
         onChange={readOnly ? undefined : (e) => onChange?.(e.target.value)}
         className={`w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-ring focus:ring-1 focus:ring-ring ${
-          readOnly ? "cursor-default opacity-70 select-all" : ""
+          readOnly ? "cursor-default opacity-70 select-all bg-muted/40" : ""
         }`}
       />
     </label>
@@ -116,7 +117,7 @@ function SelectField({
         disabled={readOnly}
         onChange={readOnly ? undefined : (e) => onChange?.(e.target.value)}
         className={`w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-ring focus:ring-1 focus:ring-ring ${
-          readOnly ? "opacity-70 cursor-default" : ""
+          readOnly ? "opacity-70 cursor-default bg-muted/40" : ""
         }`}
       >
         <option value="">— Select —</option>
@@ -190,20 +191,34 @@ function initForm(p: MyProfile | null | undefined) {
 
 function ProfilePage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const sessionFn = useServerFn(getSessionInfo);
   const profileFn = useServerFn(getMyProfile);
   const saveFn = useServerFn(updateMyProfile);
 
   const session = useQuery({ queryKey: ["session"], queryFn: () => sessionFn() });
-  const profile = useQuery({ queryKey: ["my-profile"], queryFn: () => profileFn() });
+  const isEmployee = session.data?.role === "employee";
+  const profile = useQuery({
+    queryKey: ["my-profile"],
+    queryFn: () => profileFn(),
+    enabled: isEmployee,
+  });
+
+  // Redirect admins and sub-admins away from employee profile
+  useEffect(() => {
+    if (!session.data) return;
+    if (session.data.role === "admin") {
+      navigate({ to: "/admin", replace: true });
+    } else if (session.data.role === "sub_admin") {
+      navigate({ to: "/project", replace: true });
+    }
+  }, [session.data, navigate]);
 
   const [activeTab, setActiveTab] = useState<Tab>("basic");
   const [form, setForm] = useState(initForm(null));
   const [showSalary, setShowSalary] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const isEmployee = session.data?.role === "employee";
 
   useEffect(() => {
     if (profile.data) {
@@ -216,6 +231,7 @@ function ProfilePage() {
     setForm((f) => ({ ...f, [key]: v }));
 
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isEmployee) return;
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -245,6 +261,23 @@ function ProfilePage() {
 
   if (!session.data) return null;
 
+  // Admins do not have or need an employee profile
+  if (session.data.role !== "employee") {
+    return (
+      <AppShell session={session.data}>
+        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-center">
+          <div className="rounded-full bg-primary/10 p-4 text-primary">
+            <ShieldAlert className="size-8" />
+          </div>
+          <h2 className="text-xl font-bold tracking-tight">Admin Account</h2>
+          <p className="max-w-md text-sm text-muted-foreground">
+            Administrators do not require an employee profile. Redirecting to the Admin Panel…
+          </p>
+        </div>
+      </AppShell>
+    );
+  }
+
   const profileData = profile.data;
   const employeeId = profileData?.id?.slice(-8).toUpperCase() ?? "—";
 
@@ -261,15 +294,27 @@ function ProfilePage() {
   return (
     <AppShell session={session.data}>
       <div className="mx-auto max-w-5xl">
+        {/* Employee Read-Only Banner */}
+        {isEmployee && (
+          <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-800 dark:text-amber-300">
+            <ShieldAlert className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>
+              <strong>Profile Edit Locked:</strong> Profile details are managed by Administrators. Please contact an administrator to request updates to your account details.
+            </span>
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-center gap-5">
             {/* Avatar */}
             <div className="relative shrink-0">
               <div
-                className="flex size-20 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-primary/20 bg-muted shadow-md"
-                onClick={() => fileRef.current?.click()}
-                title="Click to change photo"
+                className={`flex size-20 items-center justify-center overflow-hidden rounded-2xl border-2 border-primary/20 bg-muted shadow-md ${
+                  isEmployee ? "cursor-default" : "cursor-pointer"
+                }`}
+                onClick={isEmployee ? undefined : () => fileRef.current?.click()}
+                title={isEmployee ? "Profile picture" : "Click to change photo"}
               >
                 {photoPreview ? (
                   <img src={photoPreview} alt="Profile" className="size-full object-cover" />
@@ -277,19 +322,22 @@ function ProfilePage() {
                   <User className="size-9 text-muted-foreground" />
                 )}
               </div>
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full border border-border bg-background shadow hover:bg-muted"
-                title="Upload photo"
-              >
-                <Camera className="size-3" />
-              </button>
+              {!isEmployee && (
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full border border-border bg-background shadow hover:bg-muted"
+                  title="Upload photo"
+                >
+                  <Camera className="size-3" />
+                </button>
+              )}
               <input
                 ref={fileRef}
                 type="file"
                 accept="image/*"
                 className="hidden"
                 onChange={handlePhoto}
+                disabled={isEmployee}
               />
             </div>
             <div>
@@ -312,14 +360,16 @@ function ProfilePage() {
             </div>
           </div>
 
-          <button
-            onClick={() => save.mutate()}
-            disabled={save.isPending || !form.fullName.trim()}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:opacity-50"
-          >
-            <Save className="size-4" />
-            {save.isPending ? "Saving…" : "Save Changes"}
-          </button>
+          {!isEmployee && (
+            <button
+              onClick={() => save.mutate()}
+              disabled={save.isPending || !form.fullName.trim()}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:opacity-50"
+            >
+              <Save className="size-4" />
+              {save.isPending ? "Saving…" : "Save Changes"}
+            </button>
+          )}
         </div>
 
         {/* Tab bar */}
@@ -355,12 +405,14 @@ function ProfilePage() {
                 value={form.fullName}
                 onChange={set("fullName")}
                 required
+                readOnly={isEmployee}
                 placeholder="e.g. Alex Rivera"
               />
               <SelectField
                 label="Gender"
                 value={form.gender}
                 onChange={set("gender")}
+                readOnly={isEmployee}
                 options={[
                   { value: "male", label: "Male" },
                   { value: "female", label: "Female" },
@@ -373,11 +425,13 @@ function ProfilePage() {
                 value={form.dateOfBirth}
                 onChange={set("dateOfBirth")}
                 type="date"
+                readOnly={isEmployee}
               />
               <Field
                 label="Mobile Number"
                 value={form.mobile}
                 onChange={set("mobile")}
+                readOnly={isEmployee}
                 placeholder="+91 98765 43210"
               />
               <Field
@@ -390,6 +444,7 @@ function ProfilePage() {
                   label="Address"
                   value={form.address}
                   onChange={set("address")}
+                  readOnly={isEmployee}
                   placeholder="Street address"
                 />
               </div>
@@ -397,18 +452,21 @@ function ProfilePage() {
                 label="City"
                 value={form.city}
                 onChange={set("city")}
+                readOnly={isEmployee}
                 placeholder="e.g. Mumbai"
               />
               <Field
                 label="State"
                 value={form.state}
                 onChange={set("state")}
+                readOnly={isEmployee}
                 placeholder="e.g. Maharashtra"
               />
               <Field
                 label="Pincode"
                 value={form.pincode}
                 onChange={set("pincode")}
+                readOnly={isEmployee}
                 placeholder="e.g. 400001"
               />
             </div>
@@ -427,18 +485,21 @@ function ProfilePage() {
                 label="Designation / Job Title"
                 value={form.jobTitle}
                 onChange={set("jobTitle")}
+                readOnly={isEmployee}
                 placeholder="e.g. Senior Analyst"
               />
               <Field
                 label="Department"
                 value={form.department}
                 onChange={set("department")}
+                readOnly={isEmployee}
                 placeholder="e.g. Business Intelligence"
               />
               <SelectField
                 label="Job Type"
                 value={form.jobType}
                 onChange={set("jobType")}
+                readOnly={isEmployee}
                 options={[
                   { value: "full-time", label: "Full-time" },
                   { value: "part-time", label: "Part-time" },
@@ -451,11 +512,13 @@ function ProfilePage() {
                 value={form.joiningDate}
                 onChange={set("joiningDate")}
                 type="date"
+                readOnly={isEmployee}
               />
               <Field
                 label="Work Location"
                 value={form.workLocation}
                 onChange={set("workLocation")}
+                readOnly={isEmployee}
                 placeholder="e.g. Bangalore / Remote"
               />
             </div>
@@ -598,18 +661,21 @@ function ProfilePage() {
                 label="Contact Person"
                 value={form.emergencyContactName}
                 onChange={set("emergencyContactName")}
+                readOnly={isEmployee}
                 placeholder="e.g. John Rivera"
               />
               <Field
                 label="Relationship"
                 value={form.emergencyContactRelation}
                 onChange={set("emergencyContactRelation")}
+                readOnly={isEmployee}
                 placeholder="e.g. Father, Spouse"
               />
               <Field
                 label="Phone Number"
                 value={form.emergencyContactPhone}
                 onChange={set("emergencyContactPhone")}
+                readOnly={isEmployee}
                 placeholder="+91 98765 43210"
               />
               <div className="sm:col-span-2">
@@ -617,6 +683,7 @@ function ProfilePage() {
                   label="Address"
                   value={form.emergencyContactAddress}
                   onChange={set("emergencyContactAddress")}
+                  readOnly={isEmployee}
                   placeholder="Emergency contact address"
                 />
               </div>

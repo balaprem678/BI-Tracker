@@ -11,6 +11,7 @@ import {
   listEmployees,
   setEmployeeActive,
 } from "@/lib/admin.functions";
+import { AdminSearchBar } from "@/components/admin-search-bar";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
@@ -164,6 +165,11 @@ function AdminPanel() {
         </Link>
       </div>
 
+      {/* COMMON SEARCH BAR AT THE TOP */}
+      <div className="mb-6">
+        <AdminSearchBar />
+      </div>
+
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
         <Stat
           label="Total issued accounts"
@@ -195,6 +201,7 @@ function AdminPanel() {
             className="space-y-3"
           >
             <Field
+              id="create-employee-fullName"
               label="Full name"
               value={form.fullName}
               onChange={(v) => setForm({ ...form, fullName: v })}
@@ -346,17 +353,20 @@ function Field({
   onChange,
   type = "text",
   required = true,
+  id,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
   required?: boolean;
+  id?: string;
 }) {
   return (
     <label className="block">
       <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
       <input
+        id={id}
         type={type}
         required={required}
         value={value}

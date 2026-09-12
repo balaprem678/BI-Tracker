@@ -13,10 +13,13 @@ import {
   PhoneCall,
   Eye,
   EyeOff,
+  Power,
+  ShieldAlert,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionInfo } from "@/lib/tracker.functions";
 import { getEmployeeProfileById, updateMyProfile, type MyProfile } from "@/lib/profile.functions";
+import { toggleEmployeeActive } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/employee/$id")({
   head: () => ({
@@ -232,6 +235,50 @@ function AdminEmployeeProfile() {
     ? Math.max(0, Math.floor((Date.now() - joiningDate.getTime()) / 86400000))
     : 0;
 
+  const toggleActiveFn = useServerFn(toggleEmployeeActive);
+
+  const isSelf = session.data?.userId === id;
+  const isActive = profileData ? profileData.is_active ?? true : true;
+
+  const toggleActive = useMutation({
+    mutationFn: (targetActive: boolean) =>
+      toggleActiveFn({
+        data: {
+          id,
+          active: targetActive,
+        },
+      }),
+    onSuccess: (_, targetActive) => {
+      toast.success(
+        targetActive
+          ? "Employee account reactivated successfully"
+          : "Employee account deactivated. They have been logged out and open shifts ended."
+      );
+      qc.invalidateQueries({ queryKey: ["employee-profile", id] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["team-members"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const handleToggleActive = () => {
+    if (isSelf) {
+      toast.error("You cannot deactivate your own account.");
+      return;
+    }
+    if (isActive) {
+      if (
+        confirm(
+          `Are you sure you want to deactivate ${form.fullName || "this employee"}?\n\nThey will be immediately logged out, any active work shift will be clocked out, and they will not be able to sign in until reactivated.`
+        )
+      ) {
+        toggleActive.mutate(false);
+      }
+    } else {
+      toggleActive.mutate(true);
+    }
+  };
+
   return (
     <AppShell session={session.data}>
       <div className="mx-auto max-w-5xl">
@@ -245,6 +292,19 @@ function AdminEmployeeProfile() {
             Back to Admin
           </Link>
         </div>
+
+        {/* Deactivated Notice Banner */}
+        {!isActive && (
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-600 dark:text-red-400">
+            <ShieldAlert className="size-5 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-semibold">Account Deactivated</p>
+              <p className="mt-0.5 text-xs text-red-600/90 dark:text-red-400/90">
+                This employee's login access is currently disabled. They are forcefully logged out and cannot track time or access their dashboard until this account is reactivated.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-center gap-5">
@@ -264,6 +324,18 @@ function AdminEmployeeProfile() {
                   Employee
                 </span>
                 <span>·</span>
+                {isActive ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 border border-emerald-500/20 dark:text-emerald-400">
+                    <span className="size-1.5 rounded-full bg-emerald-500"></span>
+                    Active
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-2.5 py-0.5 text-xs font-medium text-red-600 border border-red-500/20 dark:text-red-400">
+                    <span className="size-1.5 rounded-full bg-red-500"></span>
+                    Deactivated
+                  </span>
+                )}
+                <span>·</span>
                 <span>ID: #{employeeId}</span>
                 {profileData?.email && (
                   <>
@@ -275,14 +347,36 @@ function AdminEmployeeProfile() {
             </div>
           </div>
 
-          <button
-            onClick={() => save.mutate()}
-            disabled={save.isPending || !form.fullName.trim()}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:opacity-50"
-          >
-            <Save className="size-4" />
-            {save.isPending ? "Saving…" : "Save Changes"}
-          </button>
+          <div className="flex items-center gap-3">
+            {!isSelf && (
+              <button
+                type="button"
+                onClick={handleToggleActive}
+                disabled={toggleActive.isPending}
+                className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-all ${
+                  isActive
+                    ? "border-red-500/30 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:text-red-400"
+                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
+                } disabled:opacity-50`}
+              >
+                <Power className="size-4" />
+                {toggleActive.isPending
+                  ? "Updating…"
+                  : isActive
+                  ? "Deactivate Account"
+                  : "Reactivate Account"}
+              </button>
+            )}
+
+            <button
+              onClick={() => save.mutate()}
+              disabled={save.isPending || !form.fullName.trim()}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:opacity-50"
+            >
+              <Save className="size-4" />
+              {save.isPending ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
         </div>
 
         {/* Tab bar */}

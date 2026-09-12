@@ -67,6 +67,24 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
       throw new Error('Unauthorized: No user ID found');
     }
 
+    // Verify user account is active
+    try {
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('is_active')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (userProfile && userProfile.is_active === false) {
+        throw new Error('ACCOUNT_DEACTIVATED: Your account has been deactivated. Please contact your administrator.');
+      }
+    } catch (e: any) {
+      if (e?.message?.includes('ACCOUNT_DEACTIVATED')) {
+        throw e;
+      }
+      // If table query fails for other reasons, do not block
+    }
+
     return next({
       context: {
         supabase,

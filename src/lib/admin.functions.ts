@@ -118,12 +118,53 @@ export const setEmployeeActive = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
+
+    if (data.id === context.userId) {
+      throw new Error("You cannot deactivate your own administrator account.");
+    }
+
     const { error } = await context.supabase
       .from("profiles")
       .update({ is_active: data.active })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
-    return { ok: true as const };
+
+    // If deactivated, auto-clock out active shifts and stop project sessions
+    if (!data.active) {
+      const nowIso = new Date().toISOString();
+      await context.supabase
+        .from("shifts")
+        .update({
+          clock_out: nowIso,
+          note: "Auto clock-out: Account deactivated by administrator",
+        })
+        .eq("user_id", data.id)
+        .is("clock_out", null);
+
+      await context.supabase
+        .from("project_sessions")
+        .update({
+          end_time: nowIso,
+          status: "Auto-Stopped",
+          daily_ended: true,
+          updated_at: nowIso,
+        })
+        .eq("user_id", data.id)
+        .eq("status", "In Progress");
+
+      try {
+        await (context.supabase as any).auth?.admin?.signOut?.(data.id);
+      } catch {
+        // Ignore fallback errors
+      }
+    }
+
+    return {
+      ok: true as const,
+      message: data.active
+        ? "Account activated successfully."
+        : "Account deactivated and active sessions stopped.",
+    };
   });
 
 export type ReportRow = {
@@ -235,3 +276,5 @@ export const getHourlyReport = createServerFn({ method: "GET" })
 
     return rows.sort((a, b) => b.hoursWorked - a.hoursWorked);
   });
+
+export { toggleEmployeeActiveStatus, toggleEmployeeActiveStatus as toggleEmployeeActive } from "./team.functions";

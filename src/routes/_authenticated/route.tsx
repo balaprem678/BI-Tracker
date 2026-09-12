@@ -14,6 +14,22 @@ export const Route = createFileRoute("/_authenticated")({
       }
       throw redirect({ to: "/auth" });
     }
+
+    // Verify account is active in database
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_active")
+      .eq("id", data.user.id)
+      .maybeSingle();
+
+    if (profile && (profile as any).is_active === false) {
+      await supabase.auth.signOut();
+      throw redirect({
+        to: "/auth",
+        search: { deactivated: "true" },
+      });
+    }
+
     return { user: data.user };
   },
   component: () => <Outlet />,

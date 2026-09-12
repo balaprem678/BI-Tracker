@@ -12,6 +12,7 @@ export type SessionInfo = {
   department: string | null;
   hourlyRate: number;
   role: Role;
+  isActive: boolean;
 };
 
 export const getSessionInfo = createServerFn({ method: "GET" })
@@ -21,7 +22,7 @@ export const getSessionInfo = createServerFn({ method: "GET" })
     const [{ data: profile }, { data: roles }] = await Promise.all([
       supabase
         .from("profiles")
-        .select("email, full_name, job_title, department, hourly_rate")
+        .select("email, full_name, job_title, department, hourly_rate, is_active")
         .eq("id", userId)
         .maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
@@ -36,6 +37,24 @@ export const getSessionInfo = createServerFn({ method: "GET" })
       jobTitle: profile?.job_title ?? null,
       department: profile?.department ?? null,
       hourlyRate: Number(profile?.hourly_rate ?? 0),
+      role: isAdmin ? "admin" : isSubAdmin ? "sub_admin" : "employee",
+      isActive: profile?.is_active ?? true,
+    };
+  });
+
+export const checkMyAccountStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ isActive: boolean; userId: string; role: Role }> => {
+    const { supabase, userId } = context;
+    const [{ data: profile }, { data: roles }] = await Promise.all([
+      supabase.from("profiles").select("is_active").eq("id", userId).maybeSingle(),
+      supabase.from("user_roles").select("role").eq("user_id", userId),
+    ]);
+    const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
+    const isSubAdmin = (roles ?? []).some((r: any) => r.role === "sub_admin");
+    return {
+      userId,
+      isActive: profile?.is_active ?? true,
       role: isAdmin ? "admin" : isSubAdmin ? "sub_admin" : "employee",
     };
   });

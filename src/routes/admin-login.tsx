@@ -40,8 +40,19 @@ function AdminLoginPage() {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }: { data: any }) => {
-      if (mounted && data.session) {
+    supabase.auth.getSession().then(async ({ data }: { data: any }) => {
+      if (mounted && data.session?.user?.id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_active")
+          .eq("id", data.session.user.id)
+          .maybeSingle();
+
+        if (profile && (profile as any).is_active === false) {
+          await supabase.auth.signOut();
+          return;
+        }
+
         setTimeout(() => navigate({ to: "/admin", replace: true }), 0);
       }
     });
@@ -64,6 +75,21 @@ function AdminLoginPage() {
 
       if (error || !data.session) {
         toast.error(error?.message || "Could not sign in.");
+        return;
+      }
+
+      // Check if user account is deactivated
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_active")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      if (profile && (profile as any).is_active === false) {
+        await supabase.auth.signOut();
+        toast.error("Your account has been deactivated. Please contact your administrator.", {
+          duration: 6000,
+        });
         return;
       }
 

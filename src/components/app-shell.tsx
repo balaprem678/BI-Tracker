@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import type { SessionInfo } from "@/lib/tracker.functions";
+import { type SessionInfo, checkMyAccountStatus } from "@/lib/tracker.functions";
 import { getPendingLeaveNotifications } from "@/lib/leave.functions";
 import { AdminSearchBar } from "@/components/admin-search-bar";
 
@@ -43,6 +43,7 @@ export function AppShell({
   const notifRef = useRef<HTMLDivElement>(null);
 
   const getPendingNotifsFn = useServerFn(getPendingLeaveNotifications);
+  const checkStatusFn = useServerFn(checkMyAccountStatus);
 
   const signOut = useCallback(async () => {
     await queryClient.cancelQueries();
@@ -50,6 +51,69 @@ export function AppShell({
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
   }, [navigate, queryClient]);
+
+  const forceDeactivatedSignOut = useCallback(async () => {
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    toast.error("Your account has been deactivated by an administrator.", {
+      duration: 8000,
+    });
+    navigate({ to: "/auth", search: { deactivated: "true" }, replace: true });
+  }, [navigate, queryClient]);
+
+  // Periodic heartbeat: check account active status every 4 seconds
+  const { data: statusData, error: statusError } = useQuery({
+    queryKey: ["my-account-status"],
+    queryFn: () => checkStatusFn({}),
+    refetchInterval: 4000,
+    retry: false,
+  });
+
+  // Supabase real-time subscription for immediate sub-second deactivation detection
+  useEffect(() => {
+    if (!session?.userId) return;
+
+    const channel = supabase
+      .channel(`profile-status-${session.userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${session.userId}`,
+        },
+        (payload: any) => {
+          if (payload.new && payload.new.is_active === false) {
+            forceDeactivatedSignOut();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.userId, forceDeactivatedSignOut]);
+
+  // Handle deactivated status from session or heartbeat response
+  useEffect(() => {
+    if (session.isActive === false) {
+      forceDeactivatedSignOut();
+      return;
+    }
+    if (statusData && statusData.isActive === false) {
+      forceDeactivatedSignOut();
+      return;
+    }
+    if (statusError) {
+      const errStr = String(statusError);
+      if (errStr.includes("ACCOUNT_DEACTIVATED") || errStr.includes("deactivated")) {
+        forceDeactivatedSignOut();
+      }
+    }
+  }, [session.isActive, statusData, statusError, forceDeactivatedSignOut]);
 
   // Real-time Pending Leave Notifications Query (for Admins)
   const isAdmin = session.role === "admin";

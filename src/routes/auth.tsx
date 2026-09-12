@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { LayoutGrid, Shield, UserCheck, User, Sparkles, ArrowRight } from "lucide-react";
+import { LayoutGrid, Shield, UserCheck, User, Sparkles, ArrowRight, AlertTriangle } from "lucide-react";
+import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import {
   DEFAULT_ADMIN_PASSWORD,
@@ -10,7 +11,12 @@ import {
 
 const EMPLOYEE_EMAIL = "employee@bi-tracker.local";
 
+const authSearchSchema = z.object({
+  deactivated: z.string().optional(),
+});
+
 export const Route = createFileRoute("/auth")({
+  validateSearch: (search) => authSearchSchema.parse(search),
   head: () => ({
     meta: [
       { title: "Employee Sign in — BI Tracker" },
@@ -27,14 +33,27 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const [identifier, setIdentifier] = useState(EMPLOYEE_EMAIL);
   const [password, setPassword] = useState(DEFAULT_ADMIN_PASSWORD);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }: { data: any }) => {
-      if (mounted && data.session) {
+    supabase.auth.getSession().then(async ({ data }: { data: any }) => {
+      if (mounted && data?.session?.user) {
+        // Verify account is active before auto-redirecting
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_active")
+          .eq("id", data.session.user.id)
+          .maybeSingle();
+
+        if (profile && profile.is_active === false) {
+          await supabase.auth.signOut();
+          return;
+        }
+
         setTimeout(() => navigate({ to: "/dashboard", replace: true }), 0);
       }
     });
@@ -60,7 +79,22 @@ function AuthPage() {
         return;
       }
 
-      toast.success(`Signed in as ${data.user?.user_metadata?.full_name || loginEmail}`);
+      // Verify if account has been deactivated
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_active, full_name")
+        .eq("id", data.session.user.id)
+        .maybeSingle();
+
+      if (profile && profile.is_active === false) {
+        await supabase.auth.signOut();
+        toast.error("Your account has been deactivated. Please contact your administrator.", {
+          duration: 7000,
+        });
+        return;
+      }
+
+      toast.success(`Signed in as ${profile?.full_name || data.user?.user_metadata?.full_name || loginEmail}`);
 
       const userRole = (data.session as any)?.user?.role || "employee";
       if (userRole === "admin") {
@@ -103,6 +137,16 @@ function AuthPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           Sign in with your employee account to clock shifts and record hourly activity logs.
         </p>
+
+        {search.deactivated === "true" && (
+          <div className="mt-4 flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3.5 text-xs text-destructive animate-in fade-in slide-in-from-top-1">
+            <AlertTriangle className="size-4 shrink-0 mt-0.5 text-destructive" />
+            <div>
+              <strong className="font-semibold block text-sm">Account Deactivated</strong>
+              <span>Your employee account has been deactivated by an administrator. Login access is currently restricted. Please contact your manager or IT administrator to restore access.</span>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSignIn} className="mt-5 space-y-4">
           <Field

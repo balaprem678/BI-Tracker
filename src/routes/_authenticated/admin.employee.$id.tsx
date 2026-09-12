@@ -20,6 +20,7 @@ import { AppShell } from "@/components/app-shell";
 import { getSessionInfo } from "@/lib/tracker.functions";
 import { getEmployeeProfileById, updateMyProfile, type MyProfile } from "@/lib/profile.functions";
 import { toggleEmployeeActive } from "@/lib/admin.functions";
+import { LEAVE_TYPES } from "@/lib/constants";
 
 export const Route = createFileRoute("/_authenticated/admin/employee/$id")({
   head: () => ({
@@ -487,11 +488,11 @@ function AdminEmployeeProfile() {
                 </div>
               ))}
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {["Work From Home", "Casual Leave", "Sick Leave", "Earned Leave"].map((l) => (
-                <div key={l} className="rounded-lg bg-muted p-4 text-center">
-                  <div className="text-2xl font-bold">0</div>
-                  <div className="mt-1 text-xs opacity-75">{l}</div>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              {LEAVE_TYPES.map((l) => (
+                <div key={l} className="rounded-lg bg-muted p-3.5 text-center">
+                  <div className="text-xl font-bold">0</div>
+                  <div className="mt-1 text-xs opacity-75 truncate">{l}</div>
                 </div>
               ))}
             </div>

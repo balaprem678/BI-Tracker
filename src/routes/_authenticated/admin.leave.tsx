@@ -69,6 +69,26 @@ function getInitials(name?: string, email?: string) {
     .join("") || "U";
 }
 
+function getLeaveTypeBadge(type: string) {
+  const norm = (type || "").toLowerCase();
+  if (norm.includes("casual")) {
+    return "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400";
+  }
+  if (norm.includes("sick")) {
+    return "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400";
+  }
+  if (norm.includes("emergency")) {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+  }
+  if (norm.includes("permission")) {
+    return "border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400";
+  }
+  if (norm.includes("wfh") || norm.includes("home")) {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+  }
+  return "border-border bg-secondary/80 text-secondary-foreground";
+}
+
 function AdminLeavePage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -374,7 +394,11 @@ function AdminLeavePage() {
 
                         {/* Leave Type */}
                         <td className="py-3.5">
-                          <span className="inline-flex rounded-md bg-secondary/80 px-2 py-1 text-xs font-semibold text-secondary-foreground">
+                          <span
+                            className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-semibold ${getLeaveTypeBadge(
+                              leave.leave_type
+                            )}`}
+                          >
                             {leave.leave_type}
                           </span>
                         </td>
@@ -594,7 +618,15 @@ function AdminLeavePage() {
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="rounded-lg bg-muted/40 p-3">
                 <span className="text-muted-foreground">Leave Type</span>
-                <p className="mt-0.5 font-bold text-foreground">{selectedLeave.leave_type}</p>
+                <p className="mt-1">
+                  <span
+                    className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-semibold ${getLeaveTypeBadge(
+                      selectedLeave.leave_type
+                    )}`}
+                  >
+                    {selectedLeave.leave_type}
+                  </span>
+                </p>
               </div>
               <div className="rounded-lg bg-muted/40 p-3">
                 <span className="text-muted-foreground">Total Duration</span>

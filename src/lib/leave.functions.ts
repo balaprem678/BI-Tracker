@@ -111,7 +111,15 @@ export const getAllLeaveRequests = createServerFn({ method: "POST" })
       query = query.eq("status", filter.status);
     }
     if (filter.leaveType && filter.leaveType !== "all") {
-      query = query.eq("leave_type", filter.leaveType);
+      if (filter.leaveType === "Casual Leave") {
+        query = query.in("leave_type", ["Casual Leave", "Casual"]);
+      } else if (filter.leaveType === "WFH") {
+        query = query.in("leave_type", ["WFH", "Work from home", "Work From Home"]);
+      } else if (filter.leaveType === "Sick") {
+        query = query.in("leave_type", ["Sick", "Sick Leave"]);
+      } else {
+        query = query.eq("leave_type", filter.leaveType);
+      }
     }
     if (filter.startDate) {
       query = query.gte("start_date", filter.startDate);

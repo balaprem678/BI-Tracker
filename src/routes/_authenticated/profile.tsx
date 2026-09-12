@@ -18,6 +18,7 @@ import {
 import { AppShell } from "@/components/app-shell";
 import { getSessionInfo } from "@/lib/tracker.functions";
 import { getMyProfile, updateMyProfile, type MyProfile } from "@/lib/profile.functions";
+import { LEAVE_TYPES } from "@/lib/constants";
 
 export const Route = createFileRoute("/_authenticated/profile")({
   head: () => ({
@@ -539,11 +540,10 @@ function ProfilePage() {
                 <StatCard label="Absent Days" value={0} color="red" />
                 <StatCard label="Late Days" value={0} color="amber" />
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <StatCard label="Work From Home" value={0} color="default" />
-                <StatCard label="Casual Leave" value="N/A" />
-                <StatCard label="Sick Leave" value="N/A" />
-                <StatCard label="Earned Leave" value="N/A" />
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {LEAVE_TYPES.map((type) => (
+                  <StatCard key={type} label={type} value={0} color="default" />
+                ))}
               </div>
             </SectionCard>
 

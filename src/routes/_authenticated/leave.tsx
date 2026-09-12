@@ -50,6 +50,26 @@ function days(a: string, b: string) {
   );
 }
 
+function getLeaveTypeBadge(type: string) {
+  const norm = (type || "").toLowerCase();
+  if (norm.includes("casual")) {
+    return "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400";
+  }
+  if (norm.includes("sick")) {
+    return "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400";
+  }
+  if (norm.includes("emergency")) {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+  }
+  if (norm.includes("permission")) {
+    return "border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400";
+  }
+  if (norm.includes("wfh") || norm.includes("home")) {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+  }
+  return "border-border bg-secondary/70 text-foreground";
+}
+
 function LeavePage() {
   const qc = useQueryClient();
   const sessionFn = useServerFn(getSessionInfo);
@@ -219,7 +239,11 @@ function LeavePage() {
                         <span className="text-xs text-muted-foreground font-medium">
                           ({duration} {duration === 1 ? "day" : "days"})
                         </span>
-                        <span className="rounded-md border border-border bg-secondary/50 px-2 py-0.5 text-xs font-semibold text-foreground">
+                        <span
+                          className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${getLeaveTypeBadge(
+                            l.leave_type
+                          )}`}
+                        >
                           {l.leave_type}
                         </span>
                       </div>

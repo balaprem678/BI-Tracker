@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { AppShell, Panel, Stat } from "@/components/app-shell";
 import { ProjectEditModal, ProjectDeleteModal } from "@/components/project-edit-modal";
+import { ProjectWorkstation } from "@/components/project-workstation";
 import { toast } from "sonner";
 import { getSessionInfo } from "@/lib/tracker.functions";
 import { listEmployees } from "@/lib/admin.functions";
@@ -407,6 +408,9 @@ function ProjectPage() {
               value={projectsList.filter((p) => p.status === "Delayed").length}
             />
           </div>
+
+          {/* Project Workstation (Real-time Live Timer & Daily Session Logs) */}
+          <ProjectWorkstation projects={projectsList} />
 
           {/* Search & Filter Toolbar */}
           <Panel title="Filter & Search Projects">

@@ -106,17 +106,23 @@ export const getMyProjects = createServerFn({ method: "GET" })
       const subAdmin = proj.assigned_sub_admin_id ? profileMap.get(proj.assigned_sub_admin_id) : null;
       const assignedEmpList = projectAssignedEmployeesMap.get(proj.id) ?? [];
       const loggedSeconds = projectHoursMap.get(proj.id) ?? 0;
+      const { cleanDescription, meta } = extractProjectMetadata(proj.description);
+
+      const progressPercent = proj.progress_percent != null ? Number(proj.progress_percent) : (meta.progress_percent ?? 0);
+      const priority = proj.priority || meta.priority || "Medium";
+      const deadline = proj.deadline || meta.deadline || null;
+      const estimatedHours = proj.estimated_hours != null ? Number(proj.estimated_hours) : (meta.estimated_hours ?? 0);
 
       return {
         id: proj.id,
         name: proj.name,
         code: proj.code || null,
-        description: proj.description || null,
-        status: proj.status || "Not Started",
-        priority: proj.priority || "Medium",
-        deadline: proj.deadline || null,
-        estimated_hours: Number(proj.estimated_hours ?? 0),
-        progress_percent: Number(proj.progress_percent ?? 0),
+        description: cleanDescription,
+        status: normalizeProjectStatus(proj.status),
+        priority: normalizeProjectPriority(priority),
+        deadline,
+        estimated_hours: estimatedHours,
+        progress_percent: progressPercent,
         start_date: proj.start_date || null,
         completion_date: proj.completion_date || null,
         assigned_sub_admin_id: proj.assigned_sub_admin_id || null,
@@ -292,11 +298,75 @@ export const autoStopMidnightSessions = createServerFn({ method: "POST" })
     return { ok: true as const, message: "Midnight check completed." };
   });
 
+export const normalizeProjectStatus = (val: unknown): "Not Started" | "In Progress" | "Completed" | "Delayed" => {
+  if (typeof val !== "string") return "Not Started";
+  const s = val.trim().toLowerCase();
+  if (s === "active" || s === "in progress" || s === "in_progress" || s === "inprogress") return "In Progress";
+  if (s === "completed" || s === "complete") return "Completed";
+  if (s === "delayed" || s === "on hold" || s === "on_hold" || s === "paused") return "Delayed";
+  return "Not Started";
+};
+
+export const normalizeProjectPriority = (val: unknown): "Low" | "Medium" | "High" | "Urgent" => {
+  if (typeof val !== "string") return "Medium";
+  const p = val.trim().toLowerCase();
+  if (p === "low") return "Low";
+  if (p === "high") return "High";
+  if (p === "urgent") return "Urgent";
+  return "Medium";
+};
+
+export const projectStatusSchema = z.preprocess(
+  normalizeProjectStatus,
+  z.enum(["Not Started", "In Progress", "Completed", "Delayed"])
+);
+
+export const projectPrioritySchema = z.preprocess(
+  normalizeProjectPriority,
+  z.enum(["Low", "Medium", "High", "Urgent"])
+);
+
+export function extractProjectMetadata(rawDescription: string | null | undefined): {
+  cleanDescription: string | null;
+  meta: {
+    progress_percent?: number;
+    priority?: "Low" | "Medium" | "High" | "Urgent";
+    deadline?: string | null;
+    estimated_hours?: number;
+  };
+} {
+  if (!rawDescription) return { cleanDescription: null, meta: {} };
+  const match = rawDescription.match(/<!--META:(.*?)-->/);
+  if (!match || !match[1]) {
+    return { cleanDescription: rawDescription, meta: {} };
+  }
+  try {
+    const meta = JSON.parse(match[1]);
+    const clean = rawDescription.replace(/<!--META:.*?-->/g, "").trim();
+    return { cleanDescription: clean || null, meta: meta || {} };
+  } catch {
+    return { cleanDescription: rawDescription, meta: {} };
+  }
+}
+
+export function encodeProjectMetadata(
+  cleanDescription: string | null | undefined,
+  meta: Record<string, any>
+): string {
+  const base = (cleanDescription || "").replace(/<!--META:.*?-->/g, "").trim();
+  const metaFiltered: Record<string, any> = {};
+  for (const [k, v] of Object.entries(meta)) {
+    if (v !== undefined) metaFiltered[k] = v;
+  }
+  if (Object.keys(metaFiltered).length === 0) return base;
+  return base ? `${base}\n\n<!--META:${JSON.stringify(metaFiltered)}-->` : `<!--META:${JSON.stringify(metaFiltered)}-->`;
+}
+
 const createProjectInput = z.object({
   name: z.string().trim().min(1, "Name is required"),
   code: z.string().trim().optional().or(z.literal("")),
   description: z.string().trim().optional().or(z.literal("")),
-  priority: z.enum(["Low", "Medium", "High", "Urgent"]).default("Medium"),
+  priority: projectPrioritySchema.default("Medium"),
   deadline: z.string().optional().or(z.literal("")),
   estimatedHours: z.number().min(0).default(0),
   assignedSubAdminId: z.string().optional().or(z.literal("")),
@@ -315,24 +385,156 @@ export const createProject = createServerFn({ method: "POST" })
       throw new Error("Unauthorized: Only Admin can create new projects.");
     }
 
-    const { data: created, error } = await supabase
+    let payload: Record<string, any> = {
+      name: data.name,
+      code: data.code || null,
+      description: data.description || null,
+      priority: data.priority,
+      deadline: data.deadline || null,
+      estimated_hours: data.estimatedHours,
+      status: "Not Started",
+      progress_percent: 0,
+      assigned_sub_admin_id: data.assignedSubAdminId || null,
+    };
+
+    let created: any = null;
+    let createError: any = null;
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const res = await supabase
+        .from("projects")
+        .insert(payload)
+        .select()
+        .maybeSingle();
+
+      if (!res.error) {
+        created = res.data;
+        createError = null;
+        break;
+      }
+
+      createError = res.error;
+      const match = res.error.message?.match(/Could not find the '([a-zA-Z0-9_]+)' column/i);
+      if (match && match[1] && match[1] in payload) {
+        delete payload[match[1]];
+      } else {
+        break;
+      }
+    }
+
+    if (createError) throw new Error(createError.message);
+    return { ok: true as const, project: created, message: `Project ${data.name} created successfully.` };
+  });
+
+const updateProjectInput = z.object({
+  id: z.string().min(1, "Project ID is required"),
+  name: z.string().trim().min(1, "Name is required"),
+  code: z.string().trim().optional().or(z.literal("")),
+  description: z.string().trim().optional().or(z.literal("")),
+  priority: projectPrioritySchema.default("Medium"),
+  status: projectStatusSchema.default("Not Started"),
+  progressPercent: z.number().min(0).max(100).default(0),
+  deadline: z.string().optional().or(z.literal("")),
+  estimatedHours: z.number().min(0).default(0),
+  assignedSubAdminId: z.string().optional().or(z.literal("")),
+});
+
+export const updateProject = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: z.input<typeof updateProjectInput>) => updateProjectInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+
+    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
+    const isSubAdmin = (roles ?? []).some((r: any) => r.role === "sub_admin");
+
+    if (!isAdmin && !isSubAdmin) {
+      throw new Error("Unauthorized: Only Admin or Sub-Admin can edit projects.");
+    }
+
+    const nowIso = new Date().toISOString();
+    const isCompleted = data.status === "Completed" || data.progressPercent === 100;
+
+    const encodedDescription = encodeProjectMetadata(data.description, {
+      progress_percent: data.progressPercent,
+      priority: data.priority,
+      deadline: data.deadline || null,
+      estimated_hours: data.estimatedHours,
+    });
+
+    let payload: Record<string, any> = {
+      name: data.name,
+      code: data.code || null,
+      description: encodedDescription || null,
+      priority: data.priority,
+      status: data.status,
+      progress_percent: data.progressPercent,
+      deadline: data.deadline || null,
+      estimated_hours: data.estimatedHours,
+      assigned_sub_admin_id: data.assignedSubAdminId || null,
+      completion_date: isCompleted ? nowIso.split("T")[0] : null,
+      updated_at: nowIso,
+    };
+
+    let updated: any = null;
+    let updateError: any = null;
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const res = await supabase
+        .from("projects")
+        .update(payload)
+        .eq("id", data.id)
+        .select()
+        .maybeSingle();
+
+      if (!res.error) {
+        updated = res.data;
+        updateError = null;
+        break;
+      }
+
+      updateError = res.error;
+      const match = res.error.message?.match(/Could not find the '([a-zA-Z0-9_]+)' column/i);
+      if (match && match[1] && match[1] in payload) {
+        delete payload[match[1]];
+      } else {
+        break;
+      }
+    }
+
+    if (updateError) throw new Error(updateError.message);
+    return { ok: true as const, project: updated || { id: data.id, name: data.name }, message: `Project ${data.name} updated successfully.` };
+  });
+
+const deleteProjectInput = z.object({
+  id: z.string().min(1, "Project ID is required"),
+});
+
+export const deleteProject = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: z.input<typeof deleteProjectInput>) => deleteProjectInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+
+    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
+
+    if (!isAdmin) {
+      throw new Error("Unauthorized: Only Admin can delete projects.");
+    }
+
+    // Clean up project relations first
+    await supabase.from("project_assignments").delete().eq("project_id", data.id);
+    await supabase.from("project_sessions").delete().eq("project_id", data.id);
+
+    const { error } = await supabase
       .from("projects")
-      .insert({
-        name: data.name,
-        code: data.code || null,
-        description: data.description || null,
-        priority: data.priority,
-        deadline: data.deadline || null,
-        estimated_hours: data.estimatedHours,
-        status: "Not Started",
-        progress_percent: 0,
-        assigned_sub_admin_id: data.assignedSubAdminId || null,
-      })
-      .select()
-      .single();
+      .delete()
+      .eq("id", data.id);
 
     if (error) throw new Error(error.message);
-    return { ok: true as const, project: created, message: `Project ${data.name} created successfully.` };
+    return { ok: true as const, message: "Project deleted successfully." };
   });
 
 const assignEmployeesInput = z.object({
@@ -373,7 +575,7 @@ export const assignEmployeesToProject = createServerFn({ method: "POST" })
 
 const updateProgressInput = z.object({
   projectId: z.string().min(1),
-  status: z.enum(["Not Started", "In Progress", "Completed", "Delayed"]),
+  status: projectStatusSchema,
   progressPercent: z.number().min(0).max(100),
 });
 
@@ -385,17 +587,49 @@ export const updateProjectProgress = createServerFn({ method: "POST" })
     const nowIso = new Date().toISOString();
     const isCompleted = data.status === "Completed" || data.progressPercent === 100;
 
-    const { error } = await supabase
+    const { data: currentProj } = await supabase
       .from("projects")
-      .update({
-        status: data.status,
-        progress_percent: data.progressPercent,
-        completion_date: isCompleted ? nowIso.split("T")[0] : null,
-        updated_at: nowIso,
-      })
-      .eq("id", data.projectId);
+      .select("description")
+      .eq("id", data.projectId)
+      .maybeSingle();
 
-    if (error) throw new Error(error.message);
+    const { cleanDescription, meta } = extractProjectMetadata(currentProj?.description);
+    const updatedMeta = {
+      ...meta,
+      progress_percent: data.progressPercent,
+    };
+    const newDescription = encodeProjectMetadata(cleanDescription, updatedMeta);
+
+    let payload: Record<string, any> = {
+      status: data.status,
+      description: newDescription,
+      progress_percent: data.progressPercent,
+      completion_date: isCompleted ? nowIso.split("T")[0] : null,
+      updated_at: nowIso,
+    };
+
+    let updateError: any = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const res = await supabase
+        .from("projects")
+        .update(payload)
+        .eq("id", data.projectId);
+
+      if (!res.error) {
+        updateError = null;
+        break;
+      }
+
+      updateError = res.error;
+      const match = res.error.message?.match(/Could not find the '([a-zA-Z0-9_]+)' column/i);
+      if (match && match[1] && match[1] in payload) {
+        delete payload[match[1]];
+      } else {
+        break;
+      }
+    }
+
+    if (updateError) throw new Error(updateError.message);
     return { ok: true as const, message: "Project progress updated." };
   });
 
@@ -428,8 +662,21 @@ export const getProjectsManagementList = createServerFn({ method: "GET" })
     return (projects ?? []).map((proj: any) => {
       const subAdmin = proj.assigned_sub_admin_id ? profileMap.get(proj.assigned_sub_admin_id) : null;
       const memberCount = (assignments ?? []).filter((a: any) => a.project_id === proj.id).length;
+      const { cleanDescription, meta } = extractProjectMetadata(proj.description);
+
+      const progressPercent = proj.progress_percent != null ? Number(proj.progress_percent) : (meta.progress_percent ?? 0);
+      const priority = proj.priority || meta.priority || "Medium";
+      const deadline = proj.deadline || meta.deadline || null;
+      const estimatedHours = proj.estimated_hours != null ? Number(proj.estimated_hours) : (meta.estimated_hours ?? 0);
+
       return {
         ...proj,
+        description: cleanDescription,
+        status: normalizeProjectStatus(proj.status),
+        priority: normalizeProjectPriority(priority),
+        deadline,
+        estimated_hours: estimatedHours,
+        progress_percent: progressPercent,
         sub_admin_name: subAdmin?.full_name ?? "Unassigned",
         assigned_members_count: memberCount,
       } as Project;
@@ -494,10 +741,19 @@ export const getAdminMonitoringOverview = createServerFn({ method: "GET" })
 
       return {
         subAdmin: sa,
-        projects: saProjects.map((p: any) => ({
-          ...p,
-          logged_hours: Number(((projectHoursMap.get(p.id) ?? 0) / 3600).toFixed(2)),
-        })),
+        projects: saProjects.map((p: any) => {
+          const { cleanDescription, meta } = extractProjectMetadata(p.description);
+          return {
+            ...p,
+            description: cleanDescription,
+            status: normalizeProjectStatus(p.status),
+            priority: normalizeProjectPriority(p.priority || meta.priority),
+            progress_percent: p.progress_percent != null ? Number(p.progress_percent) : (meta.progress_percent ?? 0),
+            deadline: p.deadline || meta.deadline || null,
+            estimated_hours: p.estimated_hours != null ? Number(p.estimated_hours) : (meta.estimated_hours ?? 0),
+            logged_hours: Number(((projectHoursMap.get(p.id) ?? 0) / 3600).toFixed(2)),
+          };
+        }),
         assignedEmployees: assignedEmpList,
       };
     });
@@ -511,9 +767,16 @@ export const getAdminMonitoringOverview = createServerFn({ method: "GET" })
       const assignedEmpList = assignedUserIds.map((uid: string) => profileMap.get(uid)).filter(Boolean);
       const projectSessionsList = (allSessions ?? []).filter((s: any) => s.project_id === proj.id);
       const loggedSeconds = projectHoursMap.get(proj.id) ?? 0;
+      const { cleanDescription, meta } = extractProjectMetadata(proj.description);
 
       return {
         ...proj,
+        description: cleanDescription,
+        status: normalizeProjectStatus(proj.status),
+        priority: normalizeProjectPriority(proj.priority || meta.priority),
+        progress_percent: proj.progress_percent != null ? Number(proj.progress_percent) : (meta.progress_percent ?? 0),
+        deadline: proj.deadline || meta.deadline || null,
+        estimated_hours: proj.estimated_hours != null ? Number(proj.estimated_hours) : (meta.estimated_hours ?? 0),
         sub_admin_name: subAdmin?.full_name ?? "Unassigned",
         assigned_employees: assignedEmpList,
         sessions_history: projectSessionsList,

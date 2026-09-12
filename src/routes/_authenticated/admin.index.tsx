@@ -1,9 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { ArrowRight, KeyRound, ShieldCheck, UserPlus, Users } from "lucide-react";
+import {
+  ArrowRight,
+  KeyRound,
+  ShieldCheck,
+  UserPlus,
+  Users,
+  FolderKanban,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { AppShell, Panel, Stat } from "@/components/app-shell";
 import { getSessionInfo } from "@/lib/tracker.functions";
 import {
@@ -11,6 +20,8 @@ import {
   listEmployees,
   setEmployeeActive,
 } from "@/lib/admin.functions";
+import { getMyProjects, type Project } from "@/lib/project.functions";
+import { ProjectEditModal, ProjectDeleteModal } from "@/components/project-edit-modal";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
@@ -46,6 +57,10 @@ function AdminPanel() {
   const listFn = useServerFn(listEmployees);
   const createFn = useServerFn(createEmployee);
   const activeFn = useServerFn(setEmployeeActive);
+  const myProjectsFn = useServerFn(getMyProjects);
+
+  const [selectedProjectForEdit, setSelectedProjectForEdit] = useState<Project | null>(null);
+  const [selectedProjectForDelete, setSelectedProjectForDelete] = useState<Project | null>(null);
 
   const [form, setForm] = useState({
     email: "",
@@ -110,6 +125,15 @@ function AdminPanel() {
     },
   });
 
+  const { data: projectsList = [] } = useQuery({
+    queryKey: ["my-projects"],
+    queryFn: () => myProjectsFn({}),
+  });
+
+  const subAdminOptions = useMemo(() => {
+    return (employees ?? []).filter((e) => e.role === "sub_admin");
+  }, [employees]);
+
   if (!session) {
     return (
       <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">
@@ -164,7 +188,7 @@ function AdminPanel() {
         </Link>
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat
           label="Total issued accounts"
           value={totalEmployees}
@@ -179,6 +203,18 @@ function AdminPanel() {
           label="Administrators & Sub Admins"
           value={totalAdmins}
           breakdown={<SectionBreakdown itCount={adminIt} biCount={adminBi} />}
+        />
+        <Stat
+          label="Total Projects"
+          value={projectsList.length}
+          breakdown={
+            <span className="text-xs text-muted-foreground">
+              <strong className="font-semibold text-foreground">
+                {projectsList.filter((p) => p.status === "In Progress").length}
+              </strong>{" "}
+              in progress
+            </span>
+          }
         />
       </div>
 
@@ -337,6 +373,142 @@ function AdminPanel() {
           </Panel>
         </div>
       </div>
+
+      {/* SYSTEM PROJECTS MANAGEMENT PANEL */}
+      <div className="mt-8">
+        <Panel
+          title="System Projects Management"
+          hint="Edit project details, assign Sub-Admin leads, or remove projects across the workforce."
+          action={
+            <Link
+              to="/project"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
+            >
+              <FolderKanban className="size-3.5" />
+              Open Projects Studio <ArrowRight className="size-3" />
+            </Link>
+          }
+        >
+          {projectsList.length === 0 ? (
+            <div className="py-8 text-center">
+              <FolderKanban className="mx-auto size-10 text-muted-foreground/40" />
+              <p className="mt-2 text-xs font-medium text-foreground">No projects created yet</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Create new projects in the Projects section to assign workforce and track hours.
+              </p>
+              <Link
+                to="/project"
+                className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                Go to Projects <ArrowRight className="size-3" />
+              </Link>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-border bg-muted/40 font-semibold text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3">Project Code / Name</th>
+                    <th className="px-4 py-3">Sub-Admin Lead</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Priority</th>
+                    <th className="px-4 py-3">Progress</th>
+                    <th className="px-4 py-3">Logged Hours</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {projectsList.map((p) => (
+                    <tr key={p.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3.5">
+                        <div className="font-bold text-foreground">{p.name}</div>
+                        <div className="font-mono text-[10px] text-muted-foreground">
+                          {p.code || `PRJ-${p.id.slice(0, 4).toUpperCase()}`}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 font-medium">{p.sub_admin_name || "Unassigned"}</td>
+                      <td className="px-4 py-3.5">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            p.status === "Completed"
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                              : p.status === "In Progress"
+                              ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+                              : p.status === "Delayed"
+                              ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          ● {p.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span
+                          className={`font-semibold ${
+                            p.priority === "Urgent"
+                              ? "text-rose-500"
+                              : p.priority === "High"
+                              ? "text-amber-500"
+                              : "text-foreground"
+                          }`}
+                        >
+                          {p.priority}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 min-w-[120px]">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full bg-primary"
+                              style={{ width: `${Math.min(100, Math.max(0, p.progress_percent || 0))}%` }}
+                            />
+                          </div>
+                          <span className="font-semibold text-[11px]">{p.progress_percent || 0}%</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 font-mono">{p.logged_hours || 0} hrs</td>
+                      <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5">
+                          <button
+                            onClick={() => setSelectedProjectForEdit(p)}
+                            title="Edit Project"
+                            className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1 text-[11px] font-medium text-foreground hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-colors"
+                          >
+                            <Pencil className="size-3" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => setSelectedProjectForDelete(p)}
+                            title="Delete Project"
+                            className="inline-flex items-center gap-1 rounded border border-border px-2.5 py-1 text-[11px] font-medium text-destructive hover:border-destructive/50 hover:bg-destructive/10 transition-colors"
+                          >
+                            <Trash2 className="size-3" />
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+      </div>
+
+      {/* PROJECT EDIT & DELETE MODALS */}
+      <ProjectEditModal
+        project={selectedProjectForEdit}
+        subAdmins={subAdminOptions}
+        isOpen={!!selectedProjectForEdit}
+        onClose={() => setSelectedProjectForEdit(null)}
+      />
+
+      <ProjectDeleteModal
+        project={selectedProjectForDelete}
+        isOpen={!!selectedProjectForDelete}
+        onClose={() => setSelectedProjectForDelete(null)}
+      />
     </AppShell>
   );
 }

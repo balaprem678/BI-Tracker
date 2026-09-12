@@ -17,8 +17,12 @@ import {
   BarChart3,
   X,
   Users,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { AppShell, Panel, Stat } from "@/components/app-shell";
+import { ProjectEditModal, ProjectDeleteModal } from "@/components/project-edit-modal";
+import { toast } from "sonner";
 import { getSessionInfo } from "@/lib/tracker.functions";
 import { listEmployees } from "@/lib/admin.functions";
 import {
@@ -100,6 +104,8 @@ function ProjectPage() {
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [selectedProjectForAssign, setSelectedProjectForAssign] = useState<Project | null>(null);
   const [selectedProjectForProgress, setSelectedProjectForProgress] = useState<Project | null>(null);
+  const [selectedProjectForEdit, setSelectedProjectForEdit] = useState<Project | null>(null);
+  const [selectedProjectForDelete, setSelectedProjectForDelete] = useState<Project | null>(null);
   const [drillDownProject, setDrillDownProject] = useState<any | null>(null);
 
   // Form States
@@ -207,10 +213,18 @@ function ProjectPage() {
       assignEmployeesFn({ data }),
     onSuccess: (res) => {
       if (res.ok) {
+        toast.success(res.message || "Team assignments updated successfully.");
         queryClient.invalidateQueries({ queryKey: ["my-projects"] });
+        queryClient.refetchQueries({ queryKey: ["my-projects"] });
         queryClient.invalidateQueries({ queryKey: ["admin-monitoring-overview"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-all-projects"] });
         setShowAssignModal(false);
+      } else {
+        toast.error((res as any)?.message || "Failed to assign team members.");
       }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to assign team members.");
     },
   });
 
@@ -219,10 +233,19 @@ function ProjectPage() {
       updateProgressFn({ data }),
     onSuccess: (res) => {
       if (res.ok) {
+        toast.success(res.message || "Project progress updated successfully.");
         queryClient.invalidateQueries({ queryKey: ["my-projects"] });
+        queryClient.refetchQueries({ queryKey: ["my-projects"] });
         queryClient.invalidateQueries({ queryKey: ["admin-monitoring-overview"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-all-projects"] });
+        queryClient.invalidateQueries({ queryKey: ["project-hourly-report"] });
         setShowProgressModal(false);
+      } else {
+        toast.error((res as any)?.message || "Failed to update project progress.");
       }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to update project progress. Please try again.");
     },
   });
 
@@ -502,34 +525,55 @@ function ProjectPage() {
 
                   {/* Actions Bar */}
                   <div className="mt-5 flex items-center justify-between gap-2 border-t border-border/50 pt-3">
-                    {(isAdmin || (isSubAdmin && project.assigned_sub_admin_id === session.userId)) && (
+                    <div className="flex items-center gap-2">
+                      {(isAdmin || (isSubAdmin && project.assigned_sub_admin_id === session.userId)) && (
+                        <button
+                          onClick={() => {
+                            setSelectedProjectForAssign(project);
+                            setSelectedEmployeeIds(
+                              (project.assigned_employees || []).map((e) => e.id),
+                            );
+                            setShowAssignModal(true);
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                        >
+                          <UserCheck className="h-3.5 w-3.5" />
+                          Assign Team
+                        </button>
+                      )}
+
                       <button
                         onClick={() => {
-                          setSelectedProjectForAssign(project);
-                          setSelectedEmployeeIds(
-                            (project.assigned_employees || []).map((e) => e.id),
-                          );
-                          setShowAssignModal(true);
+                          setSelectedProjectForProgress(project);
+                          setUpdateStatus(project.status as any);
+                          setUpdatePercent(project.progress_percent || 0);
+                          setShowProgressModal(true);
                         }}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-foreground hover:text-primary transition-colors"
                       >
-                        <UserCheck className="h-3.5 w-3.5" />
-                        Assign Team
+                        <TrendingUp className="h-3.5 w-3.5" />
+                        Progress
                       </button>
-                    )}
+                    </div>
 
-                    <button
-                      onClick={() => {
-                        setSelectedProjectForProgress(project);
-                        setUpdateStatus(project.status as any);
-                        setUpdatePercent(project.progress_percent || 0);
-                        setShowProgressModal(true);
-                      }}
-                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-foreground hover:text-primary transition-colors"
-                    >
-                      <TrendingUp className="h-3.5 w-3.5" />
-                      Update Progress
-                    </button>
+                    {isAdmin && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setSelectedProjectForEdit(project)}
+                          title="Edit Project"
+                          className="flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
+                        >
+                          <Pencil className="size-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setSelectedProjectForDelete(project)}
+                          title="Delete Project"
+                          className="flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </Panel>
               ))}
@@ -590,7 +634,7 @@ function ProjectPage() {
                         <td className="px-4 py-3.5">{project.assigned_members_count || 0} members</td>
                         <td className="px-4 py-3.5 font-mono">{project.logged_hours || 0} hrs</td>
                         <td className="px-4 py-3.5 font-semibold">{project.priority}</td>
-                        <td className="px-4 py-3.5 text-right space-x-2">
+                        <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
                           {(isAdmin || (isSubAdmin && project.assigned_sub_admin_id === session.userId)) && (
                             <button
                               onClick={() => {
@@ -616,6 +660,26 @@ function ProjectPage() {
                           >
                             Update
                           </button>
+                          {isAdmin && (
+                            <>
+                              <button
+                                onClick={() => setSelectedProjectForEdit(project)}
+                                title="Edit Project"
+                                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-colors"
+                              >
+                                <Pencil className="size-3" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => setSelectedProjectForDelete(project)}
+                                title="Delete Project"
+                                className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-medium text-destructive hover:border-destructive/50 hover:bg-destructive/10 transition-colors"
+                              >
+                                <Trash2 className="size-3" />
+                                Delete
+                              </button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -1062,6 +1126,31 @@ function ProjectPage() {
               </button>
             </div>
 
+            {isAdmin && (
+              <div className="flex items-center gap-2 border-b border-border pb-4">
+                <button
+                  onClick={() => {
+                    setSelectedProjectForEdit(drillDownProject);
+                    setDrillDownProject(null);
+                  }}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary py-2 text-xs font-semibold hover:bg-secondary/80 transition-colors"
+                >
+                  <Pencil className="size-3.5 text-primary" />
+                  Edit Project Details
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedProjectForDelete(drillDownProject);
+                    setDrillDownProject(null);
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors"
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete
+                </button>
+              </div>
+            )}
+
             {/* Lineage Mapping */}
             <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
               <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Assignment Lineage</h4>
@@ -1101,6 +1190,20 @@ function ProjectPage() {
           </div>
         </div>
       )}
+
+      {/* PROJECT EDIT & DELETE MODALS */}
+      <ProjectEditModal
+        project={selectedProjectForEdit}
+        subAdmins={subAdminOptions}
+        isOpen={!!selectedProjectForEdit}
+        onClose={() => setSelectedProjectForEdit(null)}
+      />
+
+      <ProjectDeleteModal
+        project={selectedProjectForDelete}
+        isOpen={!!selectedProjectForDelete}
+        onClose={() => setSelectedProjectForDelete(null)}
+      />
     </AppShell>
   );
 }

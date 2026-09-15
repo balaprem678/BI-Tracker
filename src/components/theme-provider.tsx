@@ -51,40 +51,37 @@ export function applyDesign(prefs: UIDesignPreferences) {
   const root = document.documentElement;
   const { theme, mode, density, fontSize, radius } = prefs;
 
-  // 1. Color Scheme Mode
   const isSystemDark =
     typeof window !== "undefined" &&
     window.matchMedia &&
     window.matchMedia("(prefers-color-scheme: dark)").matches;
   const isDark = mode === "dark" || (mode === "system" && isSystemDark);
 
-  if (isDark) {
-    root.classList.add("dark");
-  } else {
-    root.classList.remove("dark");
-  }
+  root.classList.toggle("dark", isDark);
+  root.style.colorScheme = isDark ? "dark" : "light";
 
-  // 2. Color Palette Values
   const hue = theme.hue;
   const chroma = Math.max(0.08, Math.min(0.2, theme.chroma));
+  const chart4Hue = hue + 65;
+  const chart5Hue = hue + 110;
 
   if (isDark) {
-    const primary = `oklch(0.62 ${chroma + 0.05} ${hue})`;
+    const primary = `oklch(0.66 ${Math.min(chroma + 0.08, 0.24)} ${hue})`;
     const primaryForeground = "oklch(0.12 0.02 220)";
-    const background = `oklch(0.16 0.03 ${hue})`;
-    const foreground = "oklch(0.96 0.02 220)";
-    const surface = `oklch(0.2 0.025 ${hue})`;
-    const surface2 = `oklch(0.24 0.028 ${hue})`;
-    const secondary = `oklch(0.28 0.03 ${hue})`;
-    const muted = `oklch(0.26 0.028 ${hue})`;
-    const mutedForeground = "oklch(0.82 0.025 220)";
+    const background = `oklch(0.14 0.028 ${hue})`;
+    const foreground = "oklch(0.97 0.018 220)";
+    const surface = `oklch(0.19 0.024 ${hue})`;
+    const surface2 = `oklch(0.23 0.028 ${hue})`;
+    const secondary = `oklch(0.27 0.03 ${hue})`;
+    const muted = `oklch(0.24 0.026 ${hue})`;
+    const mutedForeground = "oklch(0.82 0.024 220)";
     const border = `oklch(0.92 0.02 ${hue} / 18%)`;
     const input = `oklch(0.92 0.02 ${hue} / 18%)`;
     const accent = `oklch(0.76 0.08 ${hue})`;
     const accentForeground = "oklch(0.12 0.02 220)";
     const success = `oklch(0.66 0.14 ${hue + 18})`;
-    const warning = `oklch(0.7 0.13 ${hue - 24})`;
-    const sidebar = `oklch(0.18 0.03 ${hue})`;
+    const warning = `oklch(0.72 0.13 ${hue - 24})`;
+    const sidebar = `oklch(0.17 0.026 ${hue})`;
 
     root.style.setProperty("--background", background);
     root.style.setProperty("--foreground", foreground);
@@ -112,8 +109,8 @@ export function applyDesign(prefs: UIDesignPreferences) {
     root.style.setProperty("--chart-1", primary);
     root.style.setProperty("--chart-2", success);
     root.style.setProperty("--chart-3", warning);
-    root.style.setProperty("--chart-4", `oklch(0.68 0.16 ${hue + 65})`);
-    root.style.setProperty("--chart-5", `oklch(0.7 0.17 ${hue + 110})`);
+    root.style.setProperty("--chart-4", `oklch(0.68 0.16 ${chart4Hue})`);
+    root.style.setProperty("--chart-5", `oklch(0.7 0.17 ${chart5Hue})`);
     root.style.setProperty("--sidebar", sidebar);
     root.style.setProperty("--sidebar-foreground", foreground);
     root.style.setProperty("--sidebar-primary", primary);
@@ -123,9 +120,8 @@ export function applyDesign(prefs: UIDesignPreferences) {
     root.style.setProperty("--sidebar-border", border);
     root.style.setProperty("--sidebar-ring", primary);
   } else {
-    // Crisp Light Mode Palette
-    const primary = `oklch(0.53 ${chroma} ${hue})`;
-    const primaryForeground = "oklch(0.99 0.005 220)";
+    const primary = `oklch(0.56 ${Math.min(chroma + 0.04, 0.18)} ${hue})`;
+    const primaryForeground = "oklch(0.99 0.004 220)";
     const background = `oklch(0.985 0.006 ${hue})`;
     const foreground = "oklch(0.20 0.028 258)";
     const surface = "oklch(1 0 0)";
@@ -135,7 +131,7 @@ export function applyDesign(prefs: UIDesignPreferences) {
     const mutedForeground = "oklch(0.48 0.02 258)";
     const border = `oklch(0.24 0.028 258 / 12%)`;
     const input = `oklch(0.24 0.028 258 / 16%)`;
-    const accent = `oklch(0.94 0.025 ${hue})`;
+    const accent = `oklch(0.94 0.024 ${hue})`;
     const accentForeground = `oklch(0.28 0.03 ${hue})`;
     const success = "oklch(0.53 0.13 158)";
     const warning = "oklch(0.62 0.14 70)";
@@ -167,8 +163,8 @@ export function applyDesign(prefs: UIDesignPreferences) {
     root.style.setProperty("--chart-1", primary);
     root.style.setProperty("--chart-2", success);
     root.style.setProperty("--chart-3", warning);
-    root.style.setProperty("--chart-4", `oklch(0.52 0.15 ${hue + 65})`);
-    root.style.setProperty("--chart-5", `oklch(0.55 0.17 ${hue + 110})`);
+    root.style.setProperty("--chart-4", `oklch(0.52 0.15 ${chart4Hue})`);
+    root.style.setProperty("--chart-5", `oklch(0.55 0.17 ${chart5Hue})`);
     root.style.setProperty("--sidebar", sidebar);
     root.style.setProperty("--sidebar-foreground", foreground);
     root.style.setProperty("--sidebar-primary", primary);

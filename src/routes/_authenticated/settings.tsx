@@ -71,11 +71,10 @@ function ThemeCard({
   return (
     <div
       onClick={onSelect}
-      className={`group relative flex cursor-pointer flex-col justify-between rounded-xl border p-3.5 transition-all ${
-        isActive
-          ? "border-primary bg-primary/10 shadow-sm ring-1 ring-primary"
-          : "border-border bg-card hover:border-primary/50 hover:bg-secondary/40"
-      }`}
+      className={`group relative flex cursor-pointer flex-col justify-between rounded-xl border p-3.5 transition-all ${isActive
+        ? "border-primary bg-primary/10 shadow-sm ring-1 ring-primary"
+        : "border-border bg-card hover:border-primary/50 hover:bg-secondary/40"
+        }`}
     >
       <div className="flex items-start justify-between">
         <span
@@ -86,11 +85,10 @@ function ThemeCard({
           type="button"
           onClick={onToggleFav}
           aria-label={isFav ? "Remove from favourites" : "Add to favourites"}
-          className={`rounded-md p-1.5 transition-colors ${
-            isFav
-              ? "text-rose-500 hover:text-rose-600 dark:text-rose-400"
-              : "text-muted-foreground/60 hover:text-foreground"
-          }`}
+          className={`rounded-md p-1.5 transition-colors ${isFav
+            ? "text-rose-500 hover:text-rose-600 dark:text-rose-400"
+            : "text-muted-foreground/60 hover:text-foreground"
+            }`}
         >
           <Heart className={`size-4 ${isFav ? "fill-current" : ""}`} />
         </button>
@@ -140,6 +138,9 @@ function SettingsPage() {
 
   if (!session.data) return null;
 
+  const hueSpectrum =
+    "linear-gradient(90deg, #ff3b30 0%, #ff9f1c 14%, #fef08a 28%, #a3e635 42%, #22c55e 56%, #22d3ee 70%, #3b82f6 84%, #a855f7 100%)";
+
   const handleCustomHueChange = (hue: number) => {
     setCustomHue(hue);
     const tone = createCustomTone(hue);
@@ -166,7 +167,7 @@ function SettingsPage() {
               </span>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Customize your console appearance. Each profile maintains its own unique design that is
+              Customize your console appearance. <br /> Each profile maintains its own unique design that is
               retained whenever you log in.
             </p>
           </div>
@@ -235,17 +236,15 @@ function SettingsPage() {
                 <button
                   key={m.id}
                   onClick={() => setMode(m.id)}
-                  className={`flex flex-col items-start rounded-xl border p-4 text-left transition-all ${
-                    active
-                      ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary"
-                      : "border-border bg-card hover:border-primary/50 hover:bg-secondary/40"
-                  }`}
+                  className={`flex flex-col items-start rounded-xl border p-4 text-left transition-all ${active
+                    ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary"
+                    : "border-border bg-card hover:border-primary/50 hover:bg-secondary/40"
+                    }`}
                 >
                   <div className="flex w-full items-center justify-between">
                     <span
-                      className={`grid size-9 place-items-center rounded-lg ${
-                        active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                      }`}
+                      className={`grid size-9 place-items-center rounded-lg ${active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                        }`}
                     >
                       <Icon className="size-4.5" />
                     </span>
@@ -261,6 +260,7 @@ function SettingsPage() {
 
         {/* 2. Accent Color Palettes & Custom Hue */}
         <Panel
+          className="mt-3"
           title="Accent Palette"
           hint="Pick a signature accent color tone for charts, buttons, indicators, and focus rings."
           action={
@@ -291,11 +291,10 @@ function SettingsPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => toggleFavourite(theme)}
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  isFavourite(theme)
-                    ? "border-rose-500/30 bg-rose-500/10 text-rose-500"
-                    : "border-border bg-card text-muted-foreground hover:text-foreground"
-                }`}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${isFavourite(theme)
+                  ? "border-rose-500/30 bg-rose-500/10 text-rose-500"
+                  : "border-border bg-card text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 <Heart className={`size-3.5 ${isFavourite(theme) ? "fill-current" : ""}`} />
                 {isFavourite(theme) ? "Favourited" : "Save as Favourite"}
@@ -337,11 +336,14 @@ function SettingsPage() {
                 max="360"
                 value={customHue}
                 onChange={(e) => handleCustomHueChange(Number(e.target.value))}
-                className="h-2.5 w-full cursor-pointer appearance-none rounded-lg bg-gradient-to-r from-red-500 via-green-500 via-blue-500 to-red-500 accent-primary"
+                className="h-2.5 w-full cursor-pointer appearance-none rounded-lg"
+                style={{ background: hueSpectrum }}
               />
               <span
                 className="size-7 shrink-0 rounded-md border border-border"
-                style={{ background: `oklch(0.55 0.12 ${customHue})` }}
+                style={{
+                  background: mode === "dark" ? `oklch(0.72 0.14 ${customHue})` : `oklch(0.58 0.12 ${customHue})`,
+                }}
               />
             </div>
           </div>
@@ -350,7 +352,7 @@ function SettingsPage() {
         {/* 3. Display Density & Geometry */}
         <div className="grid gap-6 md:grid-cols-2">
           {/* Display Density */}
-          <Panel
+          {/* <Panel
             title="Display Density"
             hint="Adjust row height and compact spacing across dashboards and tables."
           >
@@ -375,11 +377,10 @@ function SettingsPage() {
                   <button
                     key={d.id}
                     onClick={() => setDensity(d.id)}
-                    className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition-all ${
-                      active
-                        ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary"
-                        : "border-border bg-card hover:border-primary/50 hover:bg-secondary/40"
-                    }`}
+                    className={`flex flex-col items-start rounded-xl border p-3.5 text-left transition-all ${active
+                      ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary"
+                      : "border-border bg-card hover:border-primary/50 hover:bg-secondary/40"
+                      }`}
                   >
                     <div className="flex w-full items-center justify-between">
                       <Icon className={`size-4 ${active ? "text-primary" : "text-muted-foreground"}`} />
@@ -391,7 +392,7 @@ function SettingsPage() {
                 );
               })}
             </div>
-          </Panel>
+          </Panel> */}
 
           {/* Corner Radius */}
           <Panel
@@ -410,11 +411,10 @@ function SettingsPage() {
                   <button
                     key={r.id}
                     onClick={() => setRadius(r.id)}
-                    className={`flex flex-col items-center justify-center rounded-xl border p-3 text-center transition-all ${
-                      active
-                        ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary"
-                        : "border-border bg-card hover:border-primary/50 hover:bg-secondary/40"
-                    }`}
+                    className={`flex flex-col items-center justify-center rounded-xl border p-3 text-center transition-all ${active
+                      ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary"
+                      : "border-border bg-card hover:border-primary/50 hover:bg-secondary/40"
+                      }`}
                   >
                     <Icon className={`size-4 ${active ? "text-primary" : "text-muted-foreground"}`} />
                     <span className="mt-2 text-xs font-semibold">{r.name}</span>
@@ -424,43 +424,44 @@ function SettingsPage() {
               })}
             </div>
           </Panel>
-        </div>
 
-        {/* 4. Font Scaling */}
-        <Panel
-          title="Typography Scale"
-          hint="Scale interface font size for comfortable reading or higher information density."
-        >
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { id: "compact" as UIFontSize, label: "Compact", sample: "13.5px" },
-              { id: "normal" as UIFontSize, label: "Default", sample: "14.5px" },
-              { id: "large" as UIFontSize, label: "Large", sample: "15.5px" },
-            ].map((f) => {
-              const active = fontSize === f.id;
-              return (
-                <button
-                  key={f.id}
-                  onClick={() => setFontSize(f.id)}
-                  className={`flex items-center justify-between rounded-xl border p-3 transition-all ${
-                    active
+          {/* 4. Font Scaling */}
+          <Panel
+            title="Typography Scale"
+            hint="Scale interface font size for comfortable reading or higher information density."
+          >
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { id: "compact" as UIFontSize, label: "Compact", sample: "14px" },
+                { id: "normal" as UIFontSize, label: "Default", sample: "15px" },
+                { id: "large" as UIFontSize, label: "Large", sample: "16px" },
+              ].map((f) => {
+                const active = fontSize === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => setFontSize(f.id)}
+                    className={`flex items-center justify-between rounded-xl border p-3 transition-all ${active
                       ? "border-primary bg-primary/10 ring-1 ring-primary"
                       : "border-border bg-card hover:border-primary/50 hover:bg-secondary/40"
-                  }`}
-                >
-                  <div className="text-left">
-                    <span className="block text-xs font-semibold">{f.label}</span>
-                    <span className="text-[11px] text-muted-foreground">{f.sample}</span>
-                  </div>
-                  {active && <Check className="size-3.5 text-primary" />}
-                </button>
-              );
-            })}
-          </div>
-        </Panel>
+                      }`}
+                  >
+                    <div className="text-left">
+                      <span className="block text-xs font-semibold">{f.label}</span>
+                      <span className="text-[11px] text-muted-foreground">{f.sample}</span>
+                    </div>
+                    {active && <Check className="size-3.5 text-primary" />}
+                  </button>
+                );
+              })}
+            </div>
+          </Panel>
+        </div>
+
+
 
         {/* 5. Live Interactive Preview Console */}
-        <Panel
+        {/* <Panel
           title="Live Component Preview"
           hint="Test how your selected theme palette, appearance mode, and radius render across real UI widgets."
         >
@@ -522,10 +523,10 @@ function SettingsPage() {
               </span>
             </div>
           </div>
-        </Panel>
+        </Panel> */}
 
         {/* 6. Favourite Themes Shelf */}
-        <Panel
+        {/* <Panel
           title="Favourite Themes"
           hint="Palettes you have bookmarked for quick 1-tap switching. Stored in your profile."
         >
@@ -554,7 +555,7 @@ function SettingsPage() {
               ))}
             </div>
           )}
-        </Panel>
+        </Panel> */}
       </div>
     </AppShell>
   );

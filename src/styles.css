@@ -58,6 +58,7 @@
 }
 
 :root {
+  color-scheme: light;
   --radius: 0.5rem;
   --background: oklch(0.985 0.004 250);
   --foreground: oklch(0.24 0.028 258);
@@ -97,6 +98,10 @@
   --sidebar-ring: oklch(0.53 0.104 200);
 }
 
+.dark {
+  color-scheme: dark;
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
@@ -130,7 +135,9 @@
   background-color: var(--surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 1px 2px oklch(0.24 0.028 258 / 6%), 0 8px 24px -18px oklch(0.24 0.028 258 / 22%);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--foreground) 8%, transparent),
+    0 8px 24px -18px color-mix(in srgb, var(--primary) 26%, transparent);
 }
 
 @utility stat-number {
@@ -156,13 +163,13 @@ html[data-density="comfortable"] {
 }
 
 html[data-font-size="compact"] {
-  font-size: 13.5px;
+  font-size: 14px;
 }
 
 html[data-font-size="normal"] {
-  font-size: 14.5px;
+  font-size: 15px;
 }
 
 html[data-font-size="large"] {
-  font-size: 15.5px;
+  font-size: 16px;
 }

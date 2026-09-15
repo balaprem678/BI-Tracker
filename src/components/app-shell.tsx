@@ -568,13 +568,15 @@ export function Stat({
   breakdown?: React.ReactNode;
 }) {
   return (
-    <div className="panel p-5">
-      <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className="stat-number mt-2 text-3xl font-semibold text-foreground">
-        {value}
-        {suffix && <span className="ml-1 text-base text-muted-foreground">{suffix}</span>}
+    <div className="panel p-5 shadow-[0_12px_28px_rgba(15,23,42,0.06)] transition-transform duration-200 hover:-translate-y-0.5">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
       </p>
-      {breakdown && <div className="mt-2.5 text-xs font-medium text-muted-foreground">{breakdown}</div>}
+      <p className="stat-number mt-3 text-4xl font-bold tracking-tight text-foreground sm:text-[2.5rem]">
+        {value}
+        {suffix && <span className="ml-1 text-base font-medium text-muted-foreground">{suffix}</span>}
+      </p>
+      {breakdown && <div className="mt-3 text-xs font-medium text-muted-foreground">{breakdown}</div>}
     </div>
   );
 }

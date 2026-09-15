@@ -206,7 +206,7 @@ function AdminLeavePage() {
       </div>
 
       {/* KPI Stats */}
-      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="Total Requests" value={leaveData?.totalCount ?? 0} />
         <Stat
           label="Pending Review"
@@ -215,7 +215,7 @@ function AdminLeavePage() {
         />
         <Stat label="Approved" value={leaveData?.approvedCount ?? 0} />
         <Stat label="Rejected" value={leaveData?.rejectedCount ?? 0} />
-        <Stat label="Total Days" value={totalDaysRequested} suffix=" days" />
+        {/* <Stat label="Total Days" value={totalDaysRequested} suffix=" days" /> */}
       </div>
 
       {/* Main Filter & Search Bar */}

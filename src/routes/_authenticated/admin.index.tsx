@@ -39,14 +39,34 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 
 function SectionBreakdown({ itCount, biCount }: { itCount: number; biCount: number }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-      <span>
-        IT Team: <strong className="font-semibold text-foreground">{itCount}</strong>
-      </span>
-      <span className="text-muted-foreground/40">•</span>
-      <span>
-        BI Staff: <strong className="font-semibold text-foreground">{biCount}</strong>
-      </span>
+    <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+      <div className="rounded-2xl bg-gradient-to-br from-sky-500 via-cyan-400 to-blue-500 p-[1px] shadow-[0_16px_40px_rgba(14,165,233,0.25)]">
+        <div className="flex h-full min-h-[86px] flex-col justify-between rounded-[15px] bg-slate-950/95 p-3 text-white">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-200">
+              IT Team
+            </span>
+            <span className="rounded-full border border-sky-400/30 bg-sky-400/10 px-1.5 py-0.5 text-[9px] font-medium text-sky-100">
+              Live
+            </span>
+          </div>
+          <div className="text-3xl font-black tracking-[-0.06em] text-white">{itCount}</div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-purple-500 p-[1px] shadow-[0_16px_40px_rgba(168,85,247,0.25)]">
+        <div className="flex h-full min-h-[86px] flex-col justify-between rounded-[15px] bg-slate-950/95 p-3 text-white">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-200">
+              BI Staff
+            </span>
+            <span className="rounded-full border border-violet-400/30 bg-violet-400/10 px-1.5 py-0.5 text-[9px] font-medium text-violet-100">
+              View
+            </span>
+          </div>
+          <div className="text-3xl font-black tracking-[-0.06em] text-white">{biCount}</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -337,10 +357,9 @@ function AdminPanel() {
           </div>
 
           {/* Quick Account Activation Manager */}
-          <Panel
+          {/* <Panel
             title="Account Status Manager"
-            hint="Quickly enable or disable user login access."
-          >
+            hint="Quickly enable or disable user login access.">
             <div className="max-h-72 overflow-y-auto divide-y divide-border">
               {(employees ?? []).map((e) => (
                 <div key={e.id} className="flex items-center justify-between gap-2 py-2.5 text-xs">
@@ -370,7 +389,7 @@ function AdminPanel() {
                 </div>
               ))}
             </div>
-          </Panel>
+          </Panel> */}
         </div>
       </div>
 

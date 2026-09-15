@@ -205,7 +205,8 @@ function Dashboard() {
     setIsAcquiringLocation(true);
     setLocationErrorModal(null);
     try {
-      toast.info("Acquiring GPS location for shift verification...");
+      // toast.info("Acquiring GPS location for shift verification...");
+      toast.info("Verification...");
       const loc = await getCurrentLocation();
       setIsAcquiringLocation(false);
       clockMutation.mutate({
@@ -382,9 +383,9 @@ function Dashboard() {
                     className="inline-flex items-center gap-1 text-primary hover:underline"
                     title="View Clock-In GPS Location"
                   >
-                    <MapPin className="size-3" />
+                    {/* <MapPin className="size-3" />
                     {openShift.clock_in_location_name}
-                    <ExternalLink className="size-3" />
+                    <ExternalLink className="size-3" /> */}
                   </a>
                 )}
               </div>
@@ -408,7 +409,7 @@ function Dashboard() {
               <Play className="size-4" />
             )}
             {isAcquiringLocation
-              ? "Verifying GPS Location…"
+              ? "Loading…"
               : openShift
                 ? "Clock Out Shift"
                 : "Clock In Shift"}

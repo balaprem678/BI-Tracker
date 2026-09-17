@@ -159,6 +159,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
 
 function initForm(p: MyProfile | null | undefined) {
   return {
+    employeeId: p?.employee_id ?? "",
     fullName: p?.full_name ?? "",
     gender: p?.gender ?? "",
     dateOfBirth: p?.date_of_birth ?? "",
@@ -219,7 +220,6 @@ function ProfilePage() {
   const [form, setForm] = useState(initForm(null));
   const [showSalary, setShowSalary] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (profile.data) {
@@ -230,19 +230,6 @@ function ProfilePage() {
 
   const set = (key: keyof ReturnType<typeof initForm>) => (v: string) =>
     setForm((f) => ({ ...f, [key]: v }));
-
-  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (isEmployee) return;
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
-      setPhotoPreview(dataUrl);
-      setForm((f) => ({ ...f, photoUrl: dataUrl }));
-    };
-    reader.readAsDataURL(file);
-  };
 
   const save = useMutation({
     mutationFn: () =>
@@ -280,7 +267,7 @@ function ProfilePage() {
   }
 
   const profileData = profile.data;
-  const employeeId = profileData?.id?.slice(-8).toUpperCase() ?? "—";
+  const employeeId = profileData?.employee_id || profileData?.id?.slice(-8).toUpperCase() || "—";
 
   // Derived leave/attendance stats from profile created_at date
   const joiningDate = profileData?.joining_date
@@ -308,14 +295,11 @@ function ProfilePage() {
         {/* Header */}
         <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-center gap-5">
-            {/* Avatar */}
+            {/* Avatar (Read-only, Admin Managed) */}
             <div className="relative shrink-0">
               <div
-                className={`flex size-20 items-center justify-center overflow-hidden rounded-2xl border-2 border-primary/20 bg-muted shadow-md ${
-                  isEmployee ? "cursor-default" : "cursor-pointer"
-                }`}
-                onClick={isEmployee ? undefined : () => fileRef.current?.click()}
-                title={isEmployee ? "Profile picture" : "Click to change photo"}
+                className="flex size-20 items-center justify-center overflow-hidden rounded-2xl border-2 border-primary/20 bg-muted shadow-md cursor-default"
+                title="Profile picture (managed by administrator)"
               >
                 {photoPreview ? (
                   <img src={photoPreview} alt="Profile" className="size-full object-cover" />
@@ -323,23 +307,6 @@ function ProfilePage() {
                   <User className="size-9 text-muted-foreground" />
                 )}
               </div>
-              {!isEmployee && (
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full border border-border bg-background shadow hover:bg-muted"
-                  title="Upload photo"
-                >
-                  <Camera className="size-3" />
-                </button>
-              )}
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhoto}
-                disabled={isEmployee}
-              />
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">
@@ -350,7 +317,7 @@ function ProfilePage() {
                   {session.data.role.replace("_", " ")}
                 </span>
                 <span>·</span>
-                <span>ID: #{employeeId}</span>
+                <span>ID: {employeeId}</span>
                 {form.department && (
                   <>
                     <span>·</span>
@@ -400,7 +367,7 @@ function ProfilePage() {
               hint="Your personal details visible to administrators."
             />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Employee ID" value={`#${employeeId}`} readOnly />
+              <Field label="Employee ID" value={employeeId} readOnly />
               <Field
                 label="Full Name"
                 value={form.fullName}

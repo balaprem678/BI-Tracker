@@ -2,6 +2,7 @@ export type Role = "admin" | "sub_admin" | "employee";
 
 export type LocalUser = {
   id: string;
+  employeeId?: string | null | undefined;
   email: string;
   username?: string;
   password?: string;
@@ -16,6 +17,7 @@ export type LocalUser = {
 
 export type LocalProfile = {
   id: string;
+  employee_id?: string | null | undefined;
   email: string | null;
   full_name: string;
   job_title: string | null;
@@ -215,6 +217,7 @@ export function generateSeedData(): LocalDatabaseSchema {
 
   const profiles: LocalProfile[] = users.map((u) => ({
     id: u.id,
+    employee_id: u.employeeId ?? (u.id === SEED_EMPLOYEE_ID ? "EMP-001" : u.id === SEED_ADMIN_ID ? "ADM-001" : "EMP-002"),
     email: u.email,
     full_name: u.fullName,
     job_title: u.jobTitle ?? null,
@@ -1212,6 +1215,7 @@ export function createLocalSupabaseClient() {
 
           const newUser: LocalUser = {
             id: crypto.randomUUID(),
+            employeeId: user_metadata?.employee_id || null,
             email,
             username,
             password: password || "BiTracker@07",
@@ -1227,6 +1231,7 @@ export function createLocalSupabaseClient() {
           db.users.push(newUser);
           db.profiles.push({
             id: newUser.id,
+            employee_id: newUser.employeeId ?? null,
             email: newUser.email,
             full_name: newUser.fullName,
             job_title: newUser.jobTitle ?? null,

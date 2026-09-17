@@ -411,8 +411,18 @@ function BiStaffPage() {
                     <tr key={m.id} className="hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                            {getInitials(m.fullName, m.email)}
+                          <div className="relative shrink-0">
+                            {m.photoUrl ? (
+                              <img
+                                src={m.photoUrl}
+                                alt={m.fullName}
+                                className="size-9 rounded-full object-cover border border-primary/20 shadow-xs"
+                              />
+                            ) : (
+                              <div className="grid size-9 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                                {getInitials(m.fullName, m.email)}
+                              </div>
+                            )}
                           </div>
                           <div>
                             <p className="font-medium text-foreground">{m.fullName}</p>
@@ -505,8 +515,18 @@ function BiStaffPage() {
                   <div>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="grid size-10 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                          {getInitials(m.fullName, m.email)}
+                        <div className="relative shrink-0">
+                          {m.photoUrl ? (
+                            <img
+                              src={m.photoUrl}
+                              alt={m.fullName}
+                              className="size-10 rounded-full object-cover border border-primary/20 shadow-xs"
+                            />
+                          ) : (
+                            <div className="grid size-10 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                              {getInitials(m.fullName, m.email)}
+                            </div>
+                          )}
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground">{m.fullName}</h3>
@@ -751,8 +771,18 @@ function EmployeeDetailsModal({
         {/* Modal Header */}
         <div className="flex items-start justify-between border-b border-border bg-muted/40 p-5">
           <div className="flex items-center gap-3">
-            <div className="grid size-12 place-items-center rounded-full bg-primary/10 text-base font-semibold text-primary">
-              {getInitials(profile.fullName, profile.email)}
+            <div className="relative shrink-0">
+              {profile.photoUrl ? (
+                <img
+                  src={profile.photoUrl}
+                  alt={profile.fullName}
+                  className="size-12 rounded-full object-cover border border-primary/20 shadow-xs"
+                />
+              ) : (
+                <div className="grid size-12 place-items-center rounded-full bg-primary/10 text-base font-semibold text-primary">
+                  {getInitials(profile.fullName, profile.email)}
+                </div>
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">

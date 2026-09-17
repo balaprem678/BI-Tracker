@@ -50,7 +50,6 @@ export const getMyProjects = createServerFn({ method: "GET" })
     // Determine user role
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
-    const isSubAdmin = (roles ?? []).some((r: any) => r.role === "sub_admin");
 
     // Get all projects & metadata
     const [{ data: allProjects, error: pErr }, { data: profiles }, { data: assignments }, { data: sessions }] =
@@ -71,18 +70,11 @@ export const getMyProjects = createServerFn({ method: "GET" })
       (assignments ?? []).filter((a: any) => a.user_id === userId).map((a: any) => a.project_id),
     );
 
-    // Filter by Visibility Rules
-    let filteredProjects: any[] = [];
-    if (isAdmin) {
-      // Admin sees ALL projects across system
-      filteredProjects = allProjects ?? [];
-    } else if (isSubAdmin) {
-      // Sub-Admin sees ONLY projects assigned to them by Admin
-      filteredProjects = (allProjects ?? []).filter((p: any) => p.assigned_sub_admin_id === userId);
-    } else {
-      // Employee sees ONLY projects assigned to them by their Sub-Admin
-      filteredProjects = (allProjects ?? []).filter((p: any) => assignedProjectIds.has(p.id));
-    }
+    // Filter by Visibility Rules:
+    // Admin manages and oversees ALL projects; Employees view projects assigned to them
+    const filteredProjects = isAdmin
+      ? (allProjects ?? [])
+      : (allProjects ?? []).filter((p: any) => assignedProjectIds.has(p.id));
 
     // Calculate logged hours per project
     const projectHoursMap = new Map<string, number>();
@@ -369,6 +361,7 @@ const createProjectInput = z.object({
   priority: projectPrioritySchema.default("Medium"),
   deadline: z.string().optional().or(z.literal("")),
   estimatedHours: z.number().min(0).default(0),
+  employeeIds: z.array(z.string()).optional(),
   assignedSubAdminId: z.string().optional().or(z.literal("")),
 });
 
@@ -394,7 +387,7 @@ export const createProject = createServerFn({ method: "POST" })
       estimated_hours: data.estimatedHours,
       status: "Not Started",
       progress_percent: 0,
-      assigned_sub_admin_id: data.assignedSubAdminId || null,
+      assigned_sub_admin_id: null,
     };
 
     let created: any = null;
@@ -423,6 +416,16 @@ export const createProject = createServerFn({ method: "POST" })
     }
 
     if (createError) throw new Error(createError.message);
+
+    // Assign employees directly if provided
+    if (created?.id && data.employeeIds && data.employeeIds.length > 0) {
+      const rows = data.employeeIds.map((empId) => ({
+        project_id: created.id,
+        user_id: empId,
+      }));
+      await supabase.from("project_assignments").insert(rows);
+    }
+
     return { ok: true as const, project: created, message: `Project ${data.name} created successfully.` };
   });
 
@@ -436,6 +439,7 @@ const updateProjectInput = z.object({
   progressPercent: z.number().min(0).max(100).default(0),
   deadline: z.string().optional().or(z.literal("")),
   estimatedHours: z.number().min(0).default(0),
+  employeeIds: z.array(z.string()).optional(),
   assignedSubAdminId: z.string().optional().or(z.literal("")),
 });
 
@@ -447,10 +451,9 @@ export const updateProject = createServerFn({ method: "POST" })
 
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
-    const isSubAdmin = (roles ?? []).some((r: any) => r.role === "sub_admin");
 
-    if (!isAdmin && !isSubAdmin) {
-      throw new Error("Unauthorized: Only Admin or Sub-Admin can edit projects.");
+    if (!isAdmin) {
+      throw new Error("Unauthorized: Only Admin can edit projects.");
     }
 
     const nowIso = new Date().toISOString();
@@ -472,7 +475,6 @@ export const updateProject = createServerFn({ method: "POST" })
       progress_percent: data.progressPercent,
       deadline: data.deadline || null,
       estimated_hours: data.estimatedHours,
-      assigned_sub_admin_id: data.assignedSubAdminId || null,
       completion_date: isCompleted ? nowIso.split("T")[0] : null,
       updated_at: nowIso,
     };
@@ -504,6 +506,19 @@ export const updateProject = createServerFn({ method: "POST" })
     }
 
     if (updateError) throw new Error(updateError.message);
+
+    // Update assigned employees if passed
+    if (data.employeeIds !== undefined) {
+      await supabase.from("project_assignments").delete().eq("project_id", data.id);
+      if (data.employeeIds.length > 0) {
+        const rows = data.employeeIds.map((empId) => ({
+          project_id: data.id,
+          user_id: empId,
+        }));
+        await supabase.from("project_assignments").insert(rows);
+      }
+    }
+
     return { ok: true as const, project: updated || { id: data.id, name: data.name }, message: `Project ${data.name} updated successfully.` };
   });
 
@@ -548,13 +563,12 @@ export const assignEmployeesToProject = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    // Check roles
+    // Check roles - Admin assigns directly to employees
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
-    const isSubAdmin = (roles ?? []).some((r: any) => r.role === "sub_admin");
 
-    if (!isAdmin && !isSubAdmin) {
-      throw new Error("Unauthorized to assign employees to project.");
+    if (!isAdmin) {
+      throw new Error("Unauthorized: Only Admin can assign employees to projects.");
     }
 
     // Delete existing assignments for this project
@@ -640,19 +654,13 @@ export const getProjectsManagementList = createServerFn({ method: "GET" })
 
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
-    const isSubAdmin = (roles ?? []).some((r: any) => r.role === "sub_admin");
 
-    if (!isAdmin && !isSubAdmin) {
+    if (!isAdmin) {
       throw new Error("Unauthorized to access project management.");
     }
 
-    let query = supabase.from("projects").select("*").order("created_at", { ascending: false });
-    if (isSubAdmin && !isAdmin) {
-      query = query.eq("assigned_sub_admin_id", userId);
-    }
-
     const [{ data: projects }, { data: profiles }, { data: assignments }] = await Promise.all([
-      query,
+      supabase.from("projects").select("*").order("created_at", { ascending: false }),
       supabase.from("profiles").select("id, full_name, email"),
       supabase.from("project_assignments").select("project_id, user_id"),
     ]);
@@ -660,7 +668,6 @@ export const getProjectsManagementList = createServerFn({ method: "GET" })
     const profileMap = new Map<string, any>((profiles ?? []).map((p: any) => [p.id, p]));
 
     return (projects ?? []).map((proj: any) => {
-      const subAdmin = proj.assigned_sub_admin_id ? profileMap.get(proj.assigned_sub_admin_id) : null;
       const memberCount = (assignments ?? []).filter((a: any) => a.project_id === proj.id).length;
       const { cleanDescription, meta } = extractProjectMetadata(proj.description);
 
@@ -677,7 +684,7 @@ export const getProjectsManagementList = createServerFn({ method: "GET" })
         deadline,
         estimated_hours: estimatedHours,
         progress_percent: progressPercent,
-        sub_admin_name: subAdmin?.full_name ?? "Unassigned",
+        sub_admin_name: "Admin Managed",
         assigned_members_count: memberCount,
       } as Project;
     });
@@ -715,10 +722,8 @@ export const getAdminMonitoringOverview = createServerFn({ method: "GET" })
       roleMap.set(r.user_id, r.role);
     }
 
-    // Sub-Admins list
-    const subAdmins = (allProfiles ?? []).filter((p: any) => roleMap.get(p.id) === "sub_admin");
     // Employees list
-    const employees = (allProfiles ?? []).filter((p: any) => roleMap.get(p.id) === "employee" || !roleMap.get(p.id));
+    const employees = (allProfiles ?? []).filter((p: any) => roleMap.get(p.id) !== "admin");
 
     // Calculate total hours per project & user
     const projectHoursMap = new Map<string, number>();
@@ -727,40 +732,31 @@ export const getAdminMonitoringOverview = createServerFn({ method: "GET" })
       projectHoursMap.set(s.project_id, current + (s.duration_seconds || 0));
     }
 
-    // Build hierarchy mapping: SubAdmin -> Assigned Projects & Assigned Employees
-    const subAdminHierarchy = subAdmins.map((sa: any) => {
-      const saProjects = (allProjects ?? []).filter((p: any) => p.assigned_sub_admin_id === sa.id);
-      const saProjectIds = new Set(saProjects.map((p: any) => p.id));
-      const saAssignedEmpIds = new Set(
-        (allAssignments ?? []).filter((a: any) => saProjectIds.has(a.project_id)).map((a: any) => a.user_id),
-      );
-
-      const assignedEmpList = Array.from(saAssignedEmpIds)
-        .map((empId: any) => profileMap.get(empId as string))
-        .filter(Boolean);
+    // Direct project allocation mapping: Admin -> Projects & Assigned Employees
+    const projectHierarchy = (allProjects ?? []).map((p: any) => {
+      const assignedEmpIds = (allAssignments ?? [])
+        .filter((a: any) => a.project_id === p.id)
+        .map((a: any) => a.user_id);
+      const assignedEmpList = assignedEmpIds.map((empId: string) => profileMap.get(empId)).filter(Boolean);
+      const { cleanDescription, meta } = extractProjectMetadata(p.description);
 
       return {
-        subAdmin: sa,
-        projects: saProjects.map((p: any) => {
-          const { cleanDescription, meta } = extractProjectMetadata(p.description);
-          return {
-            ...p,
-            description: cleanDescription,
-            status: normalizeProjectStatus(p.status),
-            priority: normalizeProjectPriority(p.priority || meta.priority),
-            progress_percent: p.progress_percent != null ? Number(p.progress_percent) : (meta.progress_percent ?? 0),
-            deadline: p.deadline || meta.deadline || null,
-            estimated_hours: p.estimated_hours != null ? Number(p.estimated_hours) : (meta.estimated_hours ?? 0),
-            logged_hours: Number(((projectHoursMap.get(p.id) ?? 0) / 3600).toFixed(2)),
-          };
-        }),
+        project: {
+          ...p,
+          description: cleanDescription,
+          status: normalizeProjectStatus(p.status),
+          priority: normalizeProjectPriority(p.priority || meta.priority),
+          progress_percent: p.progress_percent != null ? Number(p.progress_percent) : (meta.progress_percent ?? 0),
+          deadline: p.deadline || meta.deadline || null,
+          estimated_hours: p.estimated_hours != null ? Number(p.estimated_hours) : (meta.estimated_hours ?? 0),
+          logged_hours: Number(((projectHoursMap.get(p.id) ?? 0) / 3600).toFixed(2)),
+        },
         assignedEmployees: assignedEmpList,
       };
     });
 
     // Enriched projects list for drill-down
     const enrichedProjects = (allProjects ?? []).map((proj: any) => {
-      const subAdmin = proj.assigned_sub_admin_id ? profileMap.get(proj.assigned_sub_admin_id) : null;
       const assignedUserIds = (allAssignments ?? [])
         .filter((a: any) => a.project_id === proj.id)
         .map((a: any) => a.user_id);
@@ -777,7 +773,7 @@ export const getAdminMonitoringOverview = createServerFn({ method: "GET" })
         progress_percent: proj.progress_percent != null ? Number(proj.progress_percent) : (meta.progress_percent ?? 0),
         deadline: proj.deadline || meta.deadline || null,
         estimated_hours: proj.estimated_hours != null ? Number(proj.estimated_hours) : (meta.estimated_hours ?? 0),
-        sub_admin_name: subAdmin?.full_name ?? "Unassigned",
+        sub_admin_name: "Admin Managed",
         assigned_employees: assignedEmpList,
         sessions_history: projectSessionsList,
         logged_hours: Number((loggedSeconds / 3600).toFixed(2)),
@@ -785,12 +781,13 @@ export const getAdminMonitoringOverview = createServerFn({ method: "GET" })
     });
 
     return {
-      subAdminHierarchy,
+      projectHierarchy,
+      subAdminHierarchy: [], // Kept for backwards compatibility
       allProjects: enrichedProjects,
       allEmployees: employees,
-      allSubAdmins: subAdmins,
+      allSubAdmins: [],
       totalProjectsCount: (allProjects ?? []).length,
-      totalSubAdminsCount: subAdmins.length,
+      totalSubAdminsCount: 0,
       totalEmployeesCount: employees.length,
     };
   });

@@ -484,9 +484,17 @@ export function AppShell({
                       {session.role}
                     </p>
                   </div>
-                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                    {initials}
-                  </span>
+                  {session.photoUrl ? (
+                    <img
+                      src={session.photoUrl}
+                      alt={session.fullName || session.email || "Profile"}
+                      className="size-8 shrink-0 rounded-full object-cover border border-primary/20 shadow-xs"
+                    />
+                  ) : (
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                      {initials}
+                    </span>
+                  )}
                   <UserRound className="size-4 shrink-0 text-muted-foreground sm:hidden" />
                 </Link>
               ) : (
@@ -502,9 +510,17 @@ export function AppShell({
                       {session.role === "sub_admin" ? "SUB ADMIN" : "ADMIN"}
                     </p>
                   </div>
-                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                    {initials}
-                  </span>
+                  {session.photoUrl ? (
+                    <img
+                      src={session.photoUrl}
+                      alt={session.fullName || session.email || "Profile"}
+                      className="size-8 shrink-0 rounded-full object-cover border border-primary/20 shadow-xs"
+                    />
+                  ) : (
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                      {initials}
+                    </span>
+                  )}
                 </div>
               )}
             </div>

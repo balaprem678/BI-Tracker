@@ -83,6 +83,7 @@ function AdminPanel() {
   const [selectedProjectForDelete, setSelectedProjectForDelete] = useState<Project | null>(null);
 
   const [form, setForm] = useState({
+    employeeId: "",
     email: "",
     password: "",
     fullName: "",
@@ -90,7 +91,7 @@ function AdminPanel() {
     department: "",
     staffSection: "IT Team" as "IT Team" | "BI Staff",
     hourlyRate: "0",
-    role: "employee" as "employee" | "admin" | "sub_admin",
+    role: "employee" as "employee" | "admin",
   });
 
   const { data: session } = useQuery({ queryKey: ["session"], queryFn: () => sessionFn({}) });
@@ -104,6 +105,7 @@ function AdminPanel() {
     mutationFn: () =>
       createFn({
         data: {
+          employeeId: form.employeeId.trim(),
           email: form.email,
           password: form.password,
           fullName: form.fullName,
@@ -150,8 +152,12 @@ function AdminPanel() {
     queryFn: () => myProjectsFn({}),
   });
 
-  const subAdminOptions = useMemo(() => {
-    return (employees ?? []).filter((e) => e.role === "sub_admin");
+  const employeeOptions = useMemo(() => {
+    return (employees ?? []).map((e) => ({
+      id: e.id,
+      full_name: e.full_name,
+      email: e.email,
+    }));
   }, [employees]);
 
   if (!session) {
@@ -184,7 +190,7 @@ function AdminPanel() {
   const activeIt = clockedInEmployees.filter((e) => e.staff_section !== "BI Staff").length;
   const activeBi = clockedInEmployees.filter((e) => e.staff_section === "BI Staff").length;
 
-  const adminEmployees = allList.filter((e) => e.role === "admin" || e.role === "sub_admin");
+  const adminEmployees = allList.filter((e) => e.role === "admin");
   const totalAdmins = adminEmployees.length;
   const adminIt = adminEmployees.filter((e) => e.staff_section !== "BI Staff").length;
   const adminBi = adminEmployees.filter((e) => e.staff_section === "BI Staff").length;
@@ -220,7 +226,7 @@ function AdminPanel() {
           breakdown={<SectionBreakdown itCount={activeIt} biCount={activeBi} />}
         />
         <Stat
-          label="Administrators & Sub Admins"
+          label="Administrators"
           value={totalAdmins}
           breakdown={<SectionBreakdown itCount={adminIt} biCount={adminBi} />}
         />
@@ -250,12 +256,23 @@ function AdminPanel() {
             }}
             className="space-y-3"
           >
-            <Field
-              id="create-employee-fullName"
-              label="Full name"
-              value={form.fullName}
-              onChange={(v) => setForm({ ...form, fullName: v })}
-            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field
+                id="create-employee-fullName"
+                label="Full name *"
+                placeholder="e.g. John Doe"
+                value={form.fullName}
+                onChange={(v) => setForm({ ...form, fullName: v })}
+              />
+              <Field
+                id="create-employee-employeeId"
+                label="Employee ID (Manual / Custom)"
+                placeholder="e.g. EMP-001 or BI-101"
+                required={false}
+                value={form.employeeId}
+                onChange={(v) => setForm({ ...form, employeeId: v })}
+              />
+            </div>
             <Field
               label="Work email"
               type="email"
@@ -303,21 +320,21 @@ function AdminPanel() {
               </label>
 
               <label className="block">
-                <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                  Access Role
+                <span className="block text-xs font-medium text-muted-foreground">
+                  Access role
                 </span>
                 <select
+                  id="create-employee-role"
                   value={form.role}
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      role: e.target.value as "employee" | "admin" | "sub_admin",
+                      role: e.target.value as "employee" | "admin",
                     })
                   }
                   className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary"
                 >
                   <option value="employee">Employee</option>
-                  <option value="sub_admin">Sub Admin</option>
                   <option value="admin">Administrator</option>
                 </select>
               </label>
@@ -428,7 +445,7 @@ function AdminPanel() {
                 <thead className="border-b border-border bg-muted/40 font-semibold text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3">Project Code / Name</th>
-                    <th className="px-4 py-3">Sub-Admin Lead</th>
+                    <th className="px-4 py-3">Assigned Team</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Priority</th>
                     <th className="px-4 py-3">Progress</th>
@@ -445,7 +462,15 @@ function AdminPanel() {
                           {p.code || `PRJ-${p.id.slice(0, 4).toUpperCase()}`}
                         </div>
                       </td>
-                      <td className="px-4 py-3.5 font-medium">{p.sub_admin_name || "Unassigned"}</td>
+                      <td className="px-4 py-3.5 font-medium">
+                        {p.assigned_members_count && p.assigned_members_count > 0 ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 px-2.5 py-0.5 text-xs font-semibold">
+                            {p.assigned_members_count} member{p.assigned_members_count > 1 ? "s" : ""}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">Unassigned</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3.5">
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
@@ -518,7 +543,7 @@ function AdminPanel() {
       {/* PROJECT EDIT & DELETE MODALS */}
       <ProjectEditModal
         project={selectedProjectForEdit}
-        subAdmins={subAdminOptions}
+        employees={employeeOptions}
         isOpen={!!selectedProjectForEdit}
         onClose={() => setSelectedProjectForEdit(null)}
       />
@@ -538,6 +563,7 @@ function Field({
   onChange,
   type = "text",
   required = true,
+  placeholder,
   id,
 }: {
   label: string;
@@ -545,6 +571,7 @@ function Field({
   onChange: (v: string) => void;
   type?: string;
   required?: boolean;
+  placeholder?: string;
   id?: string;
 }) {
   return (
@@ -554,9 +581,10 @@ function Field({
         id={id}
         type={type}
         required={required}
+        placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary"
+        className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground/50"
       />
     </label>
   );

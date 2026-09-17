@@ -13,6 +13,7 @@ async function assertAdmin(context: { supabase: any; userId: string }) {
 
 export type Employee = {
   id: string;
+  employee_id?: string | null;
   email: string | null;
   full_name: string;
   job_title: string | null;
@@ -22,6 +23,7 @@ export type Employee = {
   is_active: boolean;
   is_clocked_in: boolean;
   role: "admin" | "sub_admin" | "employee";
+  photo_url?: string | null;
 };
 
 export const listEmployees = createServerFn({ method: "GET" })
@@ -38,6 +40,20 @@ export const listEmployees = createServerFn({ method: "GET" })
     ]);
     if (error) throw new Error(error.message);
 
+    const userMetaMap = new Map<string, { photo_url: string | null; employee_id: string | null }>();
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: userList } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+      (userList?.users ?? []).forEach((u: any) => {
+        userMetaMap.set(u.id, {
+          photo_url: u.user_metadata?.photo_url ?? null,
+          employee_id: u.user_metadata?.employee_id ?? null,
+        });
+      });
+    } catch {
+      // Ignore fallback errors
+    }
+
     const openShiftUserIds = new Set((openShifts ?? []).map((s: any) => s.user_id));
     const adminIds = new Set(
       (roles ?? []).filter((r: any) => r.role === "admin").map((r: any) => r.user_id),
@@ -47,14 +63,17 @@ export const listEmployees = createServerFn({ method: "GET" })
     );
     return (profiles ?? []).map((p: any) => ({
       ...p,
+      employee_id: userMetaMap.get(p.id)?.employee_id ?? (p as any).employee_id ?? null,
       staff_section: p.staff_section ?? "IT Team",
       hourly_rate: Number(p.hourly_rate ?? 0),
       is_clocked_in: openShiftUserIds.has(p.id),
       role: adminIds.has(p.id) ? "admin" : subAdminIds.has(p.id) ? "sub_admin" : "employee",
+      photo_url: userMetaMap.get(p.id)?.photo_url ?? null,
     }));
   });
 
 const createInput = z.object({
+  employeeId: z.string().trim().max(50).optional().or(z.literal("")),
   email: z.string().trim().email().max(255),
   password: z.string().min(8, "At least 8 characters").max(72),
   fullName: z.string().trim().min(1).max(120),
@@ -77,6 +96,7 @@ export const createEmployee = createServerFn({ method: "POST" })
       password: data.password,
       email_confirm: true,
       user_metadata: {
+        employee_id: data.employeeId || null,
         full_name: data.fullName,
         job_title: data.jobTitle || null,
         department: data.department || null,

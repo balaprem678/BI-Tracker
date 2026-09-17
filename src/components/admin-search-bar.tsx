@@ -34,6 +34,7 @@ export type SearchItem = {
   actionId?: string;
   icon?: React.ComponentType<{ className?: string }>;
   avatarText?: string;
+  photoUrl?: string | null | undefined;
   isClockedIn?: boolean;
 };
 
@@ -232,7 +233,7 @@ export function AdminSearchBar({
       items.push({
         id: `emp-${emp.id}`,
         title: emp.full_name,
-        subtitle: `${emp.job_title || "Employee"} · ${emp.email ?? "No email"} · ${emp.department || "General"}`,
+        subtitle: `${emp.employee_id ? `ID: ${emp.employee_id} · ` : ""}${emp.job_title || "Employee"} · ${emp.email ?? "No email"} · ${emp.department || "General"}`,
         category: "Employees",
         badge: emp.staff_section || (isIt ? "IT Team" : "BI Staff"),
         badgeColor: isIt
@@ -240,6 +241,7 @@ export function AdminSearchBar({
           : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
         to: `/admin/employee/${emp.id}`,
         avatarText: getInitials(emp.full_name),
+        photoUrl: emp.photo_url,
         isClockedIn: emp.is_clocked_in,
       });
     }
@@ -471,7 +473,21 @@ export function AdminSearchBar({
                           >
                             <div className="flex min-w-0 items-center gap-3">
                               {/* AVATAR OR ICON */}
-                              {item.avatarText ? (
+                              {item.photoUrl ? (
+                                <div className="relative size-8 shrink-0">
+                                  <img
+                                    src={item.photoUrl ?? undefined}
+                                    alt=""
+                                    className="size-8 rounded-lg object-cover border border-primary/20"
+                                  />
+                                  {item.isClockedIn && (
+                                    <span
+                                      title="Currently Clocked In"
+                                      className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-card bg-emerald-500"
+                                    />
+                                  )}
+                                </div>
+                              ) : item.avatarText ? (
                                 <div className="relative flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">
                                   {item.avatarText}
                                   {item.isClockedIn && (

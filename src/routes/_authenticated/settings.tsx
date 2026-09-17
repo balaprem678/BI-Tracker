@@ -485,7 +485,7 @@ function SettingsPage() {
                   Clocked In
                 </span>
                 <span className="rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                  #EMP-9021
+                  EMP-9021
                 </span>
               </div>
             </div>

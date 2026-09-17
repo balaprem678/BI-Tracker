@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export type MyProfile = {
   id: string;
+  employee_id: string | null;
   email: string | null;
   full_name: string;
   job_title: string | null;
@@ -47,6 +48,7 @@ const PROFILE_SELECT =
 function mapProfile(data: any, userMeta: any = {}): MyProfile {
   return {
     id: data?.id ?? "",
+    employee_id: userMeta?.employee_id ?? data?.employee_id ?? null,
     email: data?.email ?? userMeta?.email ?? null,
     full_name: data?.full_name || userMeta?.full_name || "",
     job_title: data?.job_title ?? userMeta?.job_title ?? null,
@@ -141,6 +143,7 @@ export const getEmployeeProfileById = createServerFn({ method: "GET" })
 
 const updateInput = z.object({
   // Basic info
+  employeeId: z.string().trim().max(50).optional().or(z.literal("")),
   fullName: z.string().trim().min(1, "Name is required").max(120),
   gender: z.string().trim().max(20).optional().or(z.literal("")),
   dateOfBirth: z.string().optional().or(z.literal("")),
@@ -212,6 +215,7 @@ export const updateMyProfile = createServerFn({ method: "POST" })
       await supabaseAdmin.auth.admin.updateUserById(targetId, {
         user_metadata: {
           ...prevMeta,
+          employee_id: data.employeeId || prevMeta.employee_id || null,
           full_name: data.fullName,
           job_title: data.jobTitle || null,
           department: data.department || null,
@@ -247,3 +251,163 @@ export const updateMyProfile = createServerFn({ method: "POST" })
 
     return { ok: true as const };
   });
+
+const uploadImageInput = z.object({
+  targetUserId: z.string().min(1),
+  fileBase64: z.string().min(1),
+  fileName: z.string().default("avatar.jpg"),
+  contentType: z.string().default("image/jpeg"),
+});
+
+export const uploadEmployeeProfileImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: z.input<typeof uploadImageInput>) => uploadImageInput.parse(input))
+  .handler(async ({ data, context }) => {
+    // 1. Enforce admin or sub_admin permission
+    const { data: roleRows } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId);
+    const roles = (roleRows ?? []).map((r: any) => r.role);
+    if (!roles.includes("admin") && !roles.includes("sub_admin")) {
+      throw new Error("Forbidden: Only administrators can upload employee profile pictures.");
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Clean base64 string
+    const base64Data = data.fileBase64.replace(/^data:image\/\w+;base64,/, "");
+    const buffer = Buffer.from(base64Data, "base64");
+
+    // Get file extension from contentType or fileName
+    let ext = "jpg";
+    if (data.contentType.includes("png")) ext = "png";
+    else if (data.contentType.includes("webp")) ext = "webp";
+    else if (data.contentType.includes("gif")) ext = "gif";
+    else if (data.fileName.includes(".")) {
+      ext = data.fileName.split(".").pop() || "jpg";
+    }
+
+    const filePath = `user_${data.targetUserId}_${Date.now()}.${ext}`;
+
+    // Upload to avatars bucket
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from("avatars")
+      .upload(filePath, buffer, {
+        contentType: data.contentType,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error("Storage upload error:", uploadError);
+      throw new Error("Failed to store image: " + uploadError.message);
+    }
+
+    const { data: publicUrlData } = supabaseAdmin.storage
+      .from("avatars")
+      .getPublicUrl(filePath);
+
+    const publicUrl = publicUrlData.publicUrl;
+
+    // Update target employee user_metadata in Auth
+    const { data: existingUser } = await supabaseAdmin.auth.admin.getUserById(data.targetUserId);
+    const prevMeta = existingUser?.user?.user_metadata || {};
+
+    const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
+      data.targetUserId,
+      {
+        user_metadata: {
+          ...prevMeta,
+          photo_url: publicUrl,
+        },
+      }
+    );
+
+    if (authUpdateError) {
+      console.error("Failed to set photo_url in auth user_metadata:", authUpdateError);
+      throw new Error("Failed to link profile photo: " + authUpdateError.message);
+    }
+
+    return { ok: true as const, photoUrl: publicUrl };
+  });
+
+const removeImageInput = z.object({
+  targetUserId: z.string().min(1),
+});
+
+export const removeEmployeeProfileImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: z.input<typeof removeImageInput>) => removeImageInput.parse(input))
+  .handler(async ({ data, context }) => {
+    // 1. Enforce admin or sub_admin permission
+    const { data: roleRows } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId);
+    const roles = (roleRows ?? []).map((r: any) => r.role);
+    if (!roles.includes("admin") && !roles.includes("sub_admin")) {
+      throw new Error("Forbidden: Only administrators can remove employee profile pictures.");
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Update target employee user_metadata in Auth
+    const { data: existingUser } = await supabaseAdmin.auth.admin.getUserById(data.targetUserId);
+    const prevMeta = existingUser?.user?.user_metadata || {};
+
+    const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
+      data.targetUserId,
+      {
+        user_metadata: {
+          ...prevMeta,
+          photo_url: null,
+        },
+      }
+    );
+
+    if (authUpdateError) {
+      throw new Error("Failed to remove profile photo: " + authUpdateError.message);
+    }
+
+    return { ok: true as const, message: "Profile photo removed." };
+  });
+
+const setImageUrlInput = z.object({
+  targetUserId: z.string().min(1),
+  photoUrl: z.string().url("Invalid image URL").max(2000),
+});
+
+export const setEmployeeProfileImageUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: z.input<typeof setImageUrlInput>) => setImageUrlInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: roleRows } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId);
+    const roles = (roleRows ?? []).map((r: any) => r.role);
+    if (!roles.includes("admin") && !roles.includes("sub_admin")) {
+      throw new Error("Forbidden: Only administrators can set employee profile pictures.");
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: existingUser } = await supabaseAdmin.auth.admin.getUserById(data.targetUserId);
+    const prevMeta = existingUser?.user?.user_metadata || {};
+
+    const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(
+      data.targetUserId,
+      {
+        user_metadata: {
+          ...prevMeta,
+          photo_url: data.photoUrl,
+        },
+      }
+    );
+
+    if (authUpdateError) {
+      throw new Error("Failed to set profile photo URL: " + authUpdateError.message);
+    }
+
+    return { ok: true as const, photoUrl: data.photoUrl };
+  });
+

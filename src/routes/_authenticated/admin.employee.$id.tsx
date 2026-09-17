@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -15,10 +15,24 @@ import {
   EyeOff,
   Power,
   ShieldAlert,
+  Camera,
+  Upload,
+  Trash2,
+  Link as LinkIcon,
+  Loader2,
+  X,
+  Check,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionInfo } from "@/lib/tracker.functions";
-import { getEmployeeProfileById, updateMyProfile, type MyProfile } from "@/lib/profile.functions";
+import {
+  getEmployeeProfileById,
+  updateMyProfile,
+  uploadEmployeeProfileImage,
+  removeEmployeeProfileImage,
+  setEmployeeProfileImageUrl,
+  type MyProfile,
+} from "@/lib/profile.functions";
 import { toggleEmployeeActive } from "@/lib/admin.functions";
 import { LEAVE_TYPES } from "@/lib/constants";
 
@@ -139,6 +153,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
 
 function initForm(p: MyProfile | null | undefined) {
   return {
+    employeeId: p?.employee_id ?? "",
     fullName: p?.full_name ?? "",
     gender: p?.gender ?? "",
     dateOfBirth: p?.date_of_birth ?? "",
@@ -175,6 +190,9 @@ function AdminEmployeeProfile() {
   const sessionFn = useServerFn(getSessionInfo);
   const getProfileFn = useServerFn(getEmployeeProfileById);
   const saveFn = useServerFn(updateMyProfile);
+  const uploadImageFn = useServerFn(uploadEmployeeProfileImage);
+  const removeImageFn = useServerFn(removeEmployeeProfileImage);
+  const setImageUrlFn = useServerFn(setEmployeeProfileImageUrl);
 
   const session = useQuery({ queryKey: ["session"], queryFn: () => sessionFn() });
   const profile = useQuery({
@@ -186,6 +204,9 @@ function AdminEmployeeProfile() {
   const [activeTab, setActiveTab] = useState<Tab>("basic");
   const [form, setForm] = useState(initForm(null));
   const [showSalary, setShowSalary] = useState(false);
+  const [urlModalOpen, setUrlModalOpen] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (profile.data) setForm(initForm(profile.data));
@@ -211,6 +232,86 @@ function AdminEmployeeProfile() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const uploadPhoto = useMutation({
+    mutationFn: async (file: File) => {
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error("File size must be less than 5MB");
+      }
+      const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error("Only JPEG, PNG, WebP, and GIF images are allowed.");
+      }
+
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (e) => reject(e);
+        reader.readAsDataURL(file);
+      });
+
+      return uploadImageFn({
+        data: {
+          targetUserId: id,
+          fileBase64: base64,
+          fileName: file.name,
+          contentType: file.type,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Employee profile picture updated successfully!");
+      qc.invalidateQueries({ queryKey: ["employee-profile", id] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["team-members"] });
+      qc.invalidateQueries({ queryKey: ["session"] });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to upload profile picture"),
+  });
+
+  const removePhoto = useMutation({
+    mutationFn: () =>
+      removeImageFn({
+        data: {
+          targetUserId: id,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Employee profile picture removed");
+      qc.invalidateQueries({ queryKey: ["employee-profile", id] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["team-members"] });
+      qc.invalidateQueries({ queryKey: ["session"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to remove profile picture"),
+  });
+
+  const setPhotoUrl = useMutation({
+    mutationFn: (url: string) =>
+      setImageUrlFn({
+        data: {
+          targetUserId: id,
+          photoUrl: url,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Employee profile picture URL updated!");
+      setUrlModalOpen(false);
+      setUrlInput("");
+      qc.invalidateQueries({ queryKey: ["employee-profile", id] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["team-members"] });
+      qc.invalidateQueries({ queryKey: ["session"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to set profile picture URL"),
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    uploadPhoto.mutate(file);
+  };
+
   if (!session.data) return null;
 
   const isAdmin = session.data.role === "admin" || session.data.role === "sub_admin";
@@ -225,7 +326,7 @@ function AdminEmployeeProfile() {
   }
 
   const profileData = profile.data;
-  const employeeId = profileData?.id?.slice(-8).toUpperCase() ?? "—";
+  const employeeId = form.employeeId || profileData?.employee_id || profileData?.id?.slice(-8).toUpperCase() || "—";
 
   const joiningDate = profileData?.joining_date
     ? new Date(profileData.joining_date)
@@ -309,12 +410,42 @@ function AdminEmployeeProfile() {
 
         <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-center gap-5">
-            <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-primary/20 bg-muted shadow-md">
-              {profileData?.photo_url ? (
-                <img src={profileData.photo_url} alt="Profile" className="size-full object-cover" />
-              ) : (
-                <User className="size-8 text-muted-foreground" />
-              )}
+            {/* Employee Profile Photo Avatar with Admin Quick Trigger */}
+            <div className="group relative shrink-0">
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="flex size-18 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-primary/20 bg-muted shadow-md transition-all hover:border-primary/50 hover:shadow-lg relative"
+                title="Click to upload or change employee photo"
+              >
+                {uploadPhoto.isPending || removePhoto.isPending || setPhotoUrl.isPending ? (
+                  <div className="flex flex-col items-center justify-center bg-background/90 p-2 text-center text-xs">
+                    <Loader2 className="size-5 animate-spin text-primary" />
+                    <span className="mt-1 text-[9px] font-semibold text-muted-foreground">Updating</span>
+                  </div>
+                ) : profileData?.photo_url ? (
+                  <img src={profileData.photo_url} alt="Profile" className="size-full object-cover" />
+                ) : (
+                  <User className="size-8 text-muted-foreground" />
+                )}
+
+                {/* Hover overlay */}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 rounded-2xl">
+                  <Camera className="size-6 text-white drop-shadow" />
+                </div>
+              </div>
+
+              {/* Floating quick upload badge */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
+                className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full border border-border bg-background shadow hover:bg-muted text-foreground transition-transform hover:scale-110"
+                title="Upload photo"
+              >
+                <Camera className="size-3.5 text-primary" />
+              </button>
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">
@@ -337,7 +468,7 @@ function AdminEmployeeProfile() {
                   </span>
                 )}
                 <span>·</span>
-                <span>ID: #{employeeId}</span>
+                <span>ID: {employeeId}</span>
                 {profileData?.email && (
                   <>
                     <span>·</span>
@@ -400,33 +531,133 @@ function AdminEmployeeProfile() {
 
         {/* Tab panels */}
         {activeTab === "basic" && (
-          <SectionCard>
-            <SectionTitle icon={<User className="size-4" />} title="Basic Information" />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Employee ID" value={`#${employeeId}`} readOnly />
-              <Field label="Full Name" value={form.fullName} onChange={set("fullName")} required placeholder="Full name" />
-              <SelectField
-                label="Gender"
-                value={form.gender}
-                onChange={set("gender")}
-                options={[
-                  { value: "male", label: "Male" },
-                  { value: "female", label: "Female" },
-                  { value: "other", label: "Other" },
-                  { value: "prefer_not", label: "Prefer not to say" },
-                ]}
+          <div className="space-y-6">
+            <SectionCard>
+              <SectionTitle
+                icon={<Camera className="size-4" />}
+                title="Employee Profile Photo"
+                hint="Upload or change this employee's official picture. Employees cannot edit their photo."
               />
-              <Field label="Date of Birth" value={form.dateOfBirth} onChange={set("dateOfBirth")} type="date" />
-              <Field label="Mobile Number" value={form.mobile} onChange={set("mobile")} placeholder="+91 98765 43210" />
-              <Field label="Email Address" value={profileData?.email ?? ""} readOnly />
-              <div className="sm:col-span-2">
-                <Field label="Address" value={form.address} onChange={set("address")} placeholder="Street address" />
+              <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
+                {/* Photo Preview */}
+                <div className="relative size-24 shrink-0 overflow-hidden rounded-2xl border-2 border-primary/20 bg-muted shadow-inner flex items-center justify-center">
+                  {uploadPhoto.isPending || removePhoto.isPending || setPhotoUrl.isPending ? (
+                    <div className="flex flex-col items-center justify-center p-2 text-center">
+                      <Loader2 className="size-6 animate-spin text-primary" />
+                      <span className="mt-1 text-[10px] font-medium text-muted-foreground">Uploading...</span>
+                    </div>
+                  ) : profileData?.photo_url ? (
+                    <img
+                      src={profileData.photo_url}
+                      alt={form.fullName || "Profile"}
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <User className="size-10 text-muted-foreground" />
+                  )}
+                </div>
+
+                {/* Actions & Guidelines */}
+                <div className="flex-1 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadPhoto.isPending || removePhoto.isPending}
+                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-xs transition hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+                    >
+                      {uploadPhoto.isPending ? (
+                        <>
+                          <Loader2 className="size-3.5 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="size-3.5" />
+                          Upload Picture
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUrlInput(profileData?.photo_url || "");
+                        setUrlModalOpen(true);
+                      }}
+                      disabled={uploadPhoto.isPending || removePhoto.isPending}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-secondary disabled:opacity-50"
+                    >
+                      <LinkIcon className="size-3.5 text-muted-foreground" />
+                      Set Image URL
+                    </button>
+
+                    {profileData?.photo_url && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Remove profile photo for ${form.fullName || "this employee"}?`)) {
+                            removePhoto.mutate();
+                          }
+                        }}
+                        disabled={removePhoto.isPending || uploadPhoto.isPending}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive transition hover:bg-destructive/20 disabled:opacity-50"
+                      >
+                        {removePhoto.isPending ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-3.5" />
+                        )}
+                        Remove Photo
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                    <p>
+                      Supports JPEG, PNG, WebP or GIF up to 5MB. Uploaded photos are stored securely in Supabase Cloud Storage.
+                    </p>
+                    <p className="text-[11px] font-medium text-primary">
+                      🔒 Only administrators can modify employee profile pictures. Employees can only view it.
+                    </p>
+                  </div>
+                </div>
               </div>
-              <Field label="City" value={form.city} onChange={set("city")} placeholder="e.g. Mumbai" />
-              <Field label="State" value={form.state} onChange={set("state")} placeholder="e.g. Maharashtra" />
-              <Field label="Pincode" value={form.pincode} onChange={set("pincode")} placeholder="e.g. 400001" />
-            </div>
-          </SectionCard>
+            </SectionCard>
+
+            <SectionCard>
+              <SectionTitle icon={<User className="size-4" />} title="Basic Information" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Employee ID (Custom / Manual)"
+                  value={form.employeeId}
+                  onChange={set("employeeId")}
+                  placeholder="e.g. EMP-001"
+                />
+                <Field label="Full Name" value={form.fullName} onChange={set("fullName")} required placeholder="Full name" />
+                <SelectField
+                  label="Gender"
+                  value={form.gender}
+                  onChange={set("gender")}
+                  options={[
+                    { value: "male", label: "Male" },
+                    { value: "female", label: "Female" },
+                    { value: "other", label: "Other" },
+                    { value: "prefer_not", label: "Prefer not to say" },
+                  ]}
+                />
+                <Field label="Date of Birth" value={form.dateOfBirth} onChange={set("dateOfBirth")} type="date" />
+                <Field label="Mobile Number" value={form.mobile} onChange={set("mobile")} placeholder="+91 98765 43210" />
+                <Field label="Email Address" value={profileData?.email ?? ""} readOnly />
+                <div className="sm:col-span-2">
+                  <Field label="Address" value={form.address} onChange={set("address")} placeholder="Street address" />
+                </div>
+                <Field label="City" value={form.city} onChange={set("city")} placeholder="e.g. Mumbai" />
+                <Field label="State" value={form.state} onChange={set("state")} placeholder="e.g. Maharashtra" />
+                <Field label="Pincode" value={form.pincode} onChange={set("pincode")} placeholder="e.g. 400001" />
+              </div>
+            </SectionCard>
+          </div>
         )}
 
         {activeTab === "employment" && (
@@ -588,8 +819,91 @@ function AdminEmployeeProfile() {
           >
             <Save className="size-4" />
             {save.isPending ? "Saving…" : "Save Changes"}
-          </button>
-        </div> */}
+        {/* Hidden File Input for Image Upload */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
+        {/* Set Image URL Modal Dialog */}
+        {urlModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+            <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <LinkIcon className="size-4 text-primary" />
+                  <h3 className="text-base font-semibold text-foreground">Set Profile Image URL</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUrlModalOpen(false)}
+                  className="rounded-lg p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Enter a direct, public image URL (HTTPS) for this employee's profile picture:
+              </p>
+
+              <div>
+                <input
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder="https://images.example.com/avatar.jpg"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs outline-none focus:border-primary"
+                  autoFocus
+                />
+              </div>
+
+              {urlInput.trim() && (
+                <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-2.5">
+                  <img
+                    src={urlInput}
+                    alt="Preview"
+                    className="size-10 rounded-lg object-cover border border-border"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = "none";
+                    }}
+                  />
+                  <div className="text-[11px] text-muted-foreground truncate">
+                    Live URL Preview
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setUrlModalOpen(false)}
+                  className="rounded-lg border border-border px-3.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!urlInput.trim()) {
+                      toast.error("Please enter a valid URL");
+                      return;
+                    }
+                    setPhotoUrl.mutate(urlInput.trim());
+                  }}
+                  disabled={setPhotoUrl.isPending || !urlInput.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground shadow-xs hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {setPhotoUrl.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                  Save URL
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AppShell>
   );

@@ -414,16 +414,31 @@ function TeamPage() {
                       >
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <span className="grid size-10 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                                {getInitials(member.fullName, member.email)}
-                              </span>
+                            <div className="relative shrink-0">
+                              {member.photoUrl ? (
+                                <img
+                                  src={member.photoUrl}
+                                  alt={member.fullName}
+                                  className="size-10 rounded-full object-cover border border-primary/20 shadow-xs"
+                                />
+                              ) : (
+                                <span className="grid size-10 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                                  {getInitials(member.fullName, member.email)}
+                                </span>
+                              )}
                               {member.isClockedIn && (
                                 <span className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-background bg-emerald-500" />
                               )}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-semibold text-foreground truncate">{member.fullName}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-semibold text-foreground truncate">{member.fullName}</p>
+                                {member.employeeId && (
+                                  <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-mono font-medium text-muted-foreground">
+                                    {member.employeeId}
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs text-muted-foreground truncate">{member.email || "No email"}</p>
                             </div>
                           </div>
@@ -790,18 +805,33 @@ function EmployeeCard({
         {/* Header: Avatar, Name, Role & Status Indicator */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                {getInitials(member.fullName, member.email)}
-              </span>
+            <div className="relative shrink-0">
+              {member.photoUrl ? (
+                <img
+                  src={member.photoUrl}
+                  alt={member.fullName}
+                  className="size-12 rounded-full object-cover border border-primary/20 shadow-xs"
+                />
+              ) : (
+                <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                  {getInitials(member.fullName, member.email)}
+                </span>
+              )}
               {member.isClockedIn && (
                 <span className="absolute bottom-0 right-0 size-3 rounded-full border-2 border-background bg-emerald-500" />
               )}
             </div>
             <div className="min-w-0">
-              <h3 className="truncate text-base font-semibold text-foreground group-hover:text-primary transition-colors">
-                {member.fullName}
-              </h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="truncate text-base font-semibold text-foreground group-hover:text-primary transition-colors">
+                  {member.fullName}
+                </h3>
+                {member.employeeId && (
+                  <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-mono font-medium text-muted-foreground">
+                    {member.employeeId}
+                  </span>
+                )}
+              </div>
               <p className="truncate text-xs text-muted-foreground">
                 {member.jobTitle || "Team Member"}
               </p>
@@ -928,14 +958,23 @@ function EmployeeAllDataModal({
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-border bg-card px-5 py-4 sm:px-6">
           <div className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-              {data?.profile ? getInitials(data.profile.fullName, data.profile.email) : "U"}
-            </span>
+            {data?.profile?.photoUrl ? (
+              <img
+                src={data.profile.photoUrl}
+                alt={data.profile.fullName}
+                className="size-10 shrink-0 rounded-full object-cover border border-primary/20 shadow-xs"
+              />
+            ) : (
+              <span className="grid size-10 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                {data?.profile ? getInitials(data.profile.fullName, data.profile.email) : "U"}
+              </span>
+            )}
             <div>
               <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
                 {data?.profile ? data.profile.fullName : "Loading employee details…"}
               </h2>
               <p className="text-xs text-muted-foreground">
+                {data?.profile.employeeId ? `ID: ${data.profile.employeeId} · ` : ""}
                 {data?.profile.jobTitle ?? "Employee"}
                 {data?.profile.department ? ` · ${data.profile.department}` : ""}
               </p>

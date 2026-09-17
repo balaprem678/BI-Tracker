@@ -13,6 +13,7 @@ async function assertAdmin(context: { supabase: any; userId: string }) {
 
 export type TeamMember = {
   id: string;
+  employeeId?: string | null;
   fullName: string;
   email: string | null;
   jobTitle: string | null;
@@ -28,6 +29,7 @@ export type TeamMember = {
   totalShiftsCount: number;
   totalLoggedHours: number;
   createdAt: string;
+  photoUrl?: string | null;
 };
 
 export type EmployeeShift = {
@@ -71,6 +73,7 @@ export type EmployeeLeave = {
 export type EmployeeAllData = {
   profile: {
     id: string;
+    employeeId?: string | null;
     fullName: string;
     email: string | null;
     jobTitle: string | null;
@@ -79,6 +82,7 @@ export type EmployeeAllData = {
     hourlyRate: number;
     role: "admin" | "sub_admin" | "employee";
     isActive: boolean;
+    photoUrl?: string | null;
     createdAt: string;
     updatedAt: string;
   };
@@ -195,6 +199,20 @@ export const getTeamMembers = createServerFn({ method: "GET" })
       openShiftMap.set(os.user_id, os.clock_in);
     }
 
+    const userMetaMap = new Map<string, { photo_url: string | null; employee_id: string | null }>();
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: userList } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+      (userList?.users ?? []).forEach((u: any) => {
+        userMetaMap.set(u.id, {
+          photo_url: u.user_metadata?.photo_url ?? null,
+          employee_id: u.user_metadata?.employee_id ?? null,
+        });
+      });
+    } catch {
+      // Ignore fallback errors
+    }
+
     return (profiles ?? []).map((p: any) => {
       const isClockedIn = openShiftMap.has(p.id);
       const currentShiftClockIn = openShiftMap.get(p.id) ?? null;
@@ -224,6 +242,7 @@ export const getTeamMembers = createServerFn({ method: "GET" })
 
       return {
         id: p.id,
+        employeeId: userMetaMap.get(p.id)?.employee_id ?? p.employee_id ?? null,
         fullName: p.full_name || p.email || "Unnamed Employee",
         email: p.email ?? null,
         jobTitle: p.job_title ?? null,
@@ -239,6 +258,7 @@ export const getTeamMembers = createServerFn({ method: "GET" })
         totalShiftsCount: userAllShifts.length,
         totalLoggedHours: userAllLogs.length,
         createdAt: p.created_at || new Date().toISOString(),
+        photoUrl: userMetaMap.get(p.id)?.photo_url ?? null,
       };
     });
   });
@@ -413,9 +433,21 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
       };
     });
 
+    let photoUrl: string | null = null;
+    let customEmployeeId: string | null = null;
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: userAuthData } = await supabaseAdmin.auth.admin.getUserById(employeeId);
+      photoUrl = userAuthData?.user?.user_metadata?.photo_url ?? null;
+      customEmployeeId = userAuthData?.user?.user_metadata?.employee_id ?? null;
+    } catch {
+      // Ignore fallback errors
+    }
+
     return {
       profile: {
         id: profile.id,
+        employeeId: customEmployeeId ?? (profile as any).employee_id ?? null,
         fullName: profile.full_name || profile.email || "Unnamed Employee",
         email: profile.email ?? null,
         jobTitle: profile.job_title ?? null,
@@ -424,6 +456,7 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
         hourlyRate: Number(profile.hourly_rate ?? 0),
         role,
         isActive: profile.is_active ?? true,
+        photoUrl,
         createdAt: profile.created_at || new Date().toISOString(),
         updatedAt: profile.updated_at || new Date().toISOString(),
       },

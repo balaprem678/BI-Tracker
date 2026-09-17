@@ -98,8 +98,6 @@ function AdminLoginPage() {
       const userRole = (data.session as any)?.user?.role || (loginEmail === DEFAULT_ADMIN_EMAIL ? "admin" : "employee");
       if (userRole === "admin") {
         navigate({ to: "/admin", replace: true });
-      } else if (userRole === "sub_admin") {
-        navigate({ to: "/project", replace: true });
       } else {
         navigate({ to: "/dashboard", replace: true });
       }

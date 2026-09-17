@@ -13,6 +13,7 @@ export type SessionInfo = {
   hourlyRate: number;
   role: Role;
   isActive: boolean;
+  photoUrl?: string | null;
 };
 
 export const getSessionInfo = createServerFn({ method: "GET" })
@@ -28,6 +29,15 @@ export const getSessionInfo = createServerFn({ method: "GET" })
       supabase.from("user_roles").select("role").eq("user_id", userId),
     ]);
 
+    let photoUrl: string | null = null;
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+      photoUrl = authUser?.user?.user_metadata?.photo_url ?? null;
+    } catch {
+      // Ignore user metadata fetch error
+    }
+
     const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
     const isSubAdmin = (roles ?? []).some((r: any) => r.role === "sub_admin");
     return {
@@ -39,6 +49,7 @@ export const getSessionInfo = createServerFn({ method: "GET" })
       hourlyRate: Number(profile?.hourly_rate ?? 0),
       role: isAdmin ? "admin" : isSubAdmin ? "sub_admin" : "employee",
       isActive: profile?.is_active ?? true,
+      photoUrl,
     };
   });
 

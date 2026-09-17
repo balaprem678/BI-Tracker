@@ -115,7 +115,7 @@ function ProjectPage() {
   const [newProjectPriority, setNewProjectPriority] = useState<"Low" | "Medium" | "High" | "Urgent">("Medium");
   const [newProjectDeadline, setNewProjectDeadline] = useState("");
   const [newProjectEstHours, setNewProjectEstHours] = useState(0);
-  const [newProjectAssignedSubAdmin, setNewProjectAssignedSubAdmin] = useState("");
+  const [newProjectSelectedEmployeeIds, setNewProjectSelectedEmployeeIds] = useState<string[]>([]);
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
@@ -141,8 +141,7 @@ function ProjectPage() {
   });
 
   const isAdmin = session?.role === "admin";
-  const isSubAdmin = session?.role === "sub_admin";
-  const isPrivileged = isAdmin || isSubAdmin;
+  const isPrivileged = isAdmin;
 
   const { data: projectsList = [], isLoading: projectsLoading } = useQuery({
     queryKey: ["my-projects", session?.role],
@@ -176,12 +175,8 @@ function ProjectPage() {
     enabled: isPrivileged && activeTab === "reports",
   });
 
-  const subAdminOptions = useMemo(() => {
-    return allEmployeesList.filter((e) => e.role === "sub_admin");
-  }, [allEmployeesList]);
-
   const employeeOptions = useMemo(() => {
-    return allEmployeesList.filter((e) => e.role === "employee");
+    return allEmployeesList.filter((e) => e.role !== "admin");
   }, [allEmployeesList]);
 
   // Mutations
@@ -200,7 +195,7 @@ function ProjectPage() {
           setNewProjectDesc("");
           setNewProjectDeadline("");
           setNewProjectEstHours(0);
-          setNewProjectAssignedSubAdmin("");
+          setNewProjectSelectedEmployeeIds([]);
         }, 1200);
       } else {
         setFormError("Could not create project.");
@@ -259,7 +254,7 @@ function ProjectPage() {
         p.name.toLowerCase().includes(q) ||
         (p.code && p.code.toLowerCase().includes(q)) ||
         (p.description && p.description.toLowerCase().includes(q)) ||
-        (p.sub_admin_name && p.sub_admin_name.toLowerCase().includes(q)),
+        (p.assigned_employees && p.assigned_employees.some((e) => e.full_name.toLowerCase().includes(q))),
     );
   }, [projectsList, searchQuery]);
 
@@ -278,21 +273,15 @@ function ProjectPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              {isAdmin
-                ? "Admin Project Management & Monitoring"
-                : isSubAdmin
-                ? "Sub-Admin Project & Team Portal"
-                : "My Assigned Projects"}
+              {isAdmin ? "Project Management & Workforce Allocation" : "My Assigned Projects"}
             </h1>
             <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-              {isAdmin ? "Admin Scope (All Projects)" : isSubAdmin ? "Sub-Admin Scope" : "Employee Assigned Scope"}
+              {isAdmin ? "Admin Scope (All Projects)" : "Assigned Projects Scope"}
             </span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {isAdmin
-              ? "Create projects, assign Sub-Admins, and monitor real-time workforce analytics."
-              : isSubAdmin
-              ? "Manage assigned projects, assign employees, and track deliverables."
+              ? "Create projects, directly assign employees, manage milestones, and monitor real-time workforce analytics."
               : "Track your assigned project tasks, progress %, and daily session logs."}
           </p>
         </div>
@@ -419,7 +408,7 @@ function ProjectPage() {
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
-                  placeholder="Search projects by name, code, description, or Sub-Admin..."
+                  placeholder="Search projects by name, code, description, or assigned team..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full rounded-lg border border-input bg-background pl-9 pr-4 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
@@ -499,12 +488,12 @@ function ProjectPage() {
                     {/* Metadata details */}
                     <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border/50 pt-3 text-[11px]">
                       <div>
-                        <span className="text-muted-foreground block">Assigned Sub-Admin</span>
-                        <span className="font-medium text-foreground">{project.sub_admin_name}</span>
-                      </div>
-                      <div>
                         <span className="text-muted-foreground block">Assigned Team</span>
                         <span className="font-medium text-foreground">{project.assigned_members_count || 0} employees</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block">Target Deadline</span>
+                        <span className="font-medium text-foreground">{project.deadline ? project.deadline.slice(0, 10) : "No deadline"}</span>
                       </div>
                       <div>
                         <span className="text-muted-foreground block">Logged Hours</span>
@@ -525,12 +514,28 @@ function ProjectPage() {
                         </span>
                       </div>
                     </div>
+
+                    {/* Assigned Employees tags */}
+                    {project.assigned_employees && project.assigned_employees.length > 0 && (
+                      <div className="mt-2.5 flex flex-wrap gap-1">
+                        {project.assigned_employees.slice(0, 3).map((emp) => (
+                          <span key={emp.id} className="rounded bg-secondary/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            {emp.full_name}
+                          </span>
+                        ))}
+                        {project.assigned_employees.length > 3 && (
+                          <span className="text-[10px] text-muted-foreground self-center">
+                            +{project.assigned_employees.length - 3} more
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions Bar */}
                   <div className="mt-5 flex items-center justify-between gap-2 border-t border-border/50 pt-3">
                     <div className="flex items-center gap-2">
-                      {(isAdmin || (isSubAdmin && project.assigned_sub_admin_id === session.userId)) && (
+                      {isAdmin && (
                         <button
                           onClick={() => {
                             setSelectedProjectForAssign(project);
@@ -592,8 +597,8 @@ function ProjectPage() {
                       <th className="px-4 py-3">Code / Name</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Progress</th>
-                      <th className="px-4 py-3">Sub-Admin</th>
-                      <th className="px-4 py-3">Team Size</th>
+                      <th className="px-4 py-3">Assigned Team</th>
+                      <th className="px-4 py-3">Deadline</th>
                       <th className="px-4 py-3">Logged Hours</th>
                       <th className="px-4 py-3">Priority</th>
                       <th className="px-4 py-3 text-right">Actions</th>
@@ -634,12 +639,29 @@ function ProjectPage() {
                             <span className="font-semibold text-[11px]">{project.progress_percent || 0}%</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3.5 font-medium">{project.sub_admin_name}</td>
-                        <td className="px-4 py-3.5">{project.assigned_members_count || 0} members</td>
+                        <td className="px-4 py-3.5">
+                          {project.assigned_employees && project.assigned_employees.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-[200px]">
+                              {project.assigned_employees.slice(0, 2).map((emp) => (
+                                <span key={emp.id} className="inline-block rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-foreground">
+                                  {emp.full_name}
+                                </span>
+                              ))}
+                              {project.assigned_employees.length > 2 && (
+                                <span className="text-[10px] text-muted-foreground font-medium self-center">
+                                  +{project.assigned_employees.length - 2} more
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground italic text-[11px]">Unassigned</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 font-mono text-[11px]">{project.deadline ? project.deadline.slice(0, 10) : "—"}</td>
                         <td className="px-4 py-3.5 font-mono">{project.logged_hours || 0} hrs</td>
                         <td className="px-4 py-3.5 font-semibold">{project.priority}</td>
                         <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
-                          {(isAdmin || (isSubAdmin && project.assigned_sub_admin_id === session.userId)) && (
+                          {isAdmin && (
                             <button
                               onClick={() => {
                                 setSelectedProjectForAssign(project);
@@ -701,67 +723,87 @@ function ProjectPage() {
       {activeTab === "monitoring" && isAdmin && (
         <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-3">
-            <Stat label="TOTAL SYSTEM SUB-ADMINS" value={adminMonitoringData?.totalSubAdminsCount || 0} />
             <Stat label="TOTAL SYSTEM EMPLOYEES" value={adminMonitoringData?.totalEmployeesCount || 0} />
             <Stat label="MONITORED PROJECTS" value={adminMonitoringData?.totalProjectsCount || 0} />
+            <Stat
+              label="TOTAL WORK SESSIONS"
+              value={(adminMonitoringData?.allProjects || []).reduce(
+                (acc: number, p: any) => acc + (p.sessions_history?.length || 0),
+                0
+              )}
+            />
           </div>
 
-          {/* Sub-Admin -> Employee Hierarchy Overview */}
+          {/* Project & Employee Allocation Overview */}
           <Panel
-            title="Sub-Admin & Employee Allocation Hierarchy"
-            hint="Overview of Sub-Admins, their assigned project deliverables, and team members assigned under each section."
+            title="Projects & Employee Direct Allocation"
+            hint="Admin direct overview of project deliverables, team members assigned to each project, logged hours, and completion metrics."
           >
             <div className="mt-4 grid gap-6 lg:grid-cols-2">
-              {(adminMonitoringData?.subAdminHierarchy || []).map((item: any) => (
-                <div key={item.subAdmin.id} className="rounded-xl border border-border bg-card/50 p-5 shadow-sm space-y-4">
+              {(adminMonitoringData?.allProjects || []).map((proj: any) => (
+                <div key={proj.id} className="rounded-xl border border-border bg-card/50 p-5 shadow-sm space-y-4">
                   <div className="flex items-center justify-between border-b border-border pb-3">
                     <div className="flex items-center gap-3">
-                      <div className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-primary font-bold text-xs">
-                        {item.subAdmin.full_name?.slice(0, 2).toUpperCase() || "SA"}
+                      <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/10 text-primary font-bold text-xs">
+                        {proj.code ? proj.code.slice(0, 3) : "PRJ"}
                       </div>
                       <div>
-                        <h4 className="text-sm font-bold text-foreground">{item.subAdmin.full_name}</h4>
-                        <p className="text-[11px] text-muted-foreground">{item.subAdmin.email}</p>
+                        <h4 className="text-sm font-bold text-foreground">{proj.name}</h4>
+                        <p className="text-[11px] text-muted-foreground">{proj.code || "Direct Admin Managed"}</p>
                       </div>
                     </div>
-                    <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-                      Sub-Admin
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        proj.status === "Completed"
+                          ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                          : proj.status === "In Progress"
+                          ? "bg-blue-500/10 text-blue-500 border border-blue-500/20"
+                          : proj.status === "Delayed"
+                          ? "bg-rose-500/10 text-rose-500 border border-rose-500/20"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {proj.status}
                     </span>
                   </div>
 
-                  {/* Assigned Projects */}
-                  <div>
-                    <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                      Assigned Projects ({item.projects.length})
-                    </h5>
-                    {item.projects.length === 0 ? (
-                      <p className="text-xs text-muted-foreground italic">No projects assigned yet.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {item.projects.map((p: any) => (
-                          <div key={p.id} className="flex items-center justify-between rounded-lg bg-background p-2.5 border border-border/50 text-xs">
-                            <span className="font-semibold text-foreground">{p.name}</span>
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono text-muted-foreground">{p.logged_hours || 0} hrs</span>
-                              <span className="font-bold text-primary">{p.progress_percent || 0}%</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  {/* Progress & Hours */}
+                  <div className="grid grid-cols-2 gap-3 bg-background/60 p-3 rounded-lg border border-border/50 text-xs">
+                    <div>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Progress</span>
+                      <span className="font-bold text-primary">{proj.progress_percent || 0}%</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Logged Hours</span>
+                      <span className="font-mono font-semibold text-foreground">{proj.logged_hours || 0} hrs</span>
+                    </div>
                   </div>
 
                   {/* Assigned Employees */}
                   <div>
-                    <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                      Assigned Team Employees ({item.assignedEmployees.length})
-                    </h5>
-                    <div className="flex flex-wrap gap-2">
-                      {item.assignedEmployees.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic">No employees assigned to Sub-Admin projects.</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Assigned Employees ({proj.assigned_employees?.length || 0})
+                      </h5>
+                      <button
+                        onClick={() => {
+                          setSelectedProjectForAssign(proj);
+                          setSelectedEmployeeIds((proj.assigned_employees || []).map((e: any) => e.id));
+                          setShowAssignModal(true);
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                      >
+                        <UserCheck className="h-3 w-3" />
+                        Manage Team
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      {(proj.assigned_employees || []).length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">No employees assigned to this project yet.</p>
                       ) : (
-                        item.assignedEmployees.map((emp: any) => (
-                          <span key={emp.id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground">
+                        (proj.assigned_employees || []).map((emp: any) => (
+                          <span key={emp.id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground">
                             <Users className="h-3 w-3 text-muted-foreground" />
                             {emp.full_name}
                           </span>
@@ -784,7 +826,7 @@ function ProjectPage() {
                 <thead className="border-b border-border bg-muted/40 font-semibold text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3">Project Name</th>
-                    <th className="px-4 py-3">Sub-Admin</th>
+                    <th className="px-4 py-3">Assigned Team</th>
                     <th className="px-4 py-3">Team Size</th>
                     <th className="px-4 py-3">Progress %</th>
                     <th className="px-4 py-3">Logged Hours</th>
@@ -800,7 +842,24 @@ function ProjectPage() {
                       className="cursor-pointer hover:bg-muted/40 transition-colors"
                     >
                       <td className="px-4 py-3.5 font-bold text-foreground">{proj.name}</td>
-                      <td className="px-4 py-3.5">{proj.sub_admin_name}</td>
+                      <td className="px-4 py-3.5">
+                        {proj.assigned_employees && proj.assigned_employees.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                            {proj.assigned_employees.slice(0, 2).map((e: any) => (
+                              <span key={e.id} className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium">
+                                {e.full_name}
+                              </span>
+                            ))}
+                            {proj.assigned_employees.length > 2 && (
+                              <span className="text-[10px] text-muted-foreground self-center">
+                                +{proj.assigned_employees.length - 2} more
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground italic">Unassigned</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3.5">{proj.assigned_employees?.length || 0} members</td>
                       <td className="px-4 py-3.5 font-bold text-primary">{proj.progress_percent || 0}%</td>
                       <td className="px-4 py-3.5 font-mono">{proj.logged_hours || 0} hrs</td>
@@ -911,20 +970,68 @@ function ProjectPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">Target Deadline</label>
+                  <input
+                    type="date"
+                    value={newProjectDeadline}
+                    onChange={(e) => setNewProjectDeadline(e.target.value)}
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-foreground mb-1">Estimated Hours</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    placeholder="e.g. 40"
+                    value={newProjectEstHours || ""}
+                    onChange={(e) => setNewProjectEstHours(Number(e.target.value) || 0)}
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="block font-semibold text-foreground mb-1">Assign Sub-Admin Lead *</label>
-                <select
-                  value={newProjectAssignedSubAdmin}
-                  onChange={(e) => setNewProjectAssignedSubAdmin(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs font-medium"
-                >
-                  <option value="">-- Select Sub-Admin --</option>
-                  {subAdminOptions.map((sa) => (
-                    <option key={sa.id} value={sa.id}>
-                      {sa.full_name} ({sa.email})
-                    </option>
-                  ))}
-                </select>
+                <label className="block font-semibold text-foreground mb-1">
+                  Assign Team Members ({newProjectSelectedEmployeeIds.length} selected)
+                </label>
+                <div className="max-h-40 overflow-y-auto space-y-1.5 rounded-lg border border-input p-2 bg-background">
+                  {employeeOptions.length === 0 ? (
+                    <p className="text-muted-foreground italic text-[11px]">No employees found.</p>
+                  ) : (
+                    employeeOptions.map((emp) => {
+                      const isChecked = newProjectSelectedEmployeeIds.includes(emp.id);
+                      return (
+                        <label
+                          key={emp.id}
+                          className={`flex items-center justify-between rounded-md p-2 cursor-pointer transition-colors text-xs ${
+                            isChecked ? "bg-primary/10 border border-primary/30" : "hover:bg-muted/50 border border-transparent"
+                          }`}
+                        >
+                          <div>
+                            <span className="font-semibold text-foreground">{emp.full_name}</span>
+                            {emp.email && <span className="text-[11px] text-muted-foreground ml-1.5">({emp.email})</span>}
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setNewProjectSelectedEmployeeIds([...newProjectSelectedEmployeeIds, emp.id]);
+                              } else {
+                                setNewProjectSelectedEmployeeIds(newProjectSelectedEmployeeIds.filter((id) => id !== emp.id));
+                              }
+                            }}
+                            className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                          />
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
               </div>
 
               <div>
@@ -953,7 +1060,9 @@ function ProjectPage() {
                     code: newProjectCode,
                     description: newProjectDesc,
                     priority: newProjectPriority,
-                    assignedSubAdminId: newProjectAssignedSubAdmin,
+                    deadline: newProjectDeadline || undefined,
+                    estimatedHours: newProjectEstHours || undefined,
+                    employeeIds: newProjectSelectedEmployeeIds,
                   });
                 }}
                 disabled={createProjectMutation.isPending || !newProjectName.trim()}
@@ -1160,8 +1269,8 @@ function ProjectPage() {
               <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Assignment Lineage</h4>
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Assigned Sub-Admin Lead:</span>
-                  <span className="font-bold text-foreground">{drillDownProject.sub_admin_name}</span>
+                  <span className="text-muted-foreground">Management:</span>
+                  <span className="font-bold text-foreground">Direct Admin Management</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Assigned Employees:</span>
@@ -1198,7 +1307,7 @@ function ProjectPage() {
       {/* PROJECT EDIT & DELETE MODALS */}
       <ProjectEditModal
         project={selectedProjectForEdit}
-        subAdmins={subAdminOptions}
+        employees={employeeOptions}
         isOpen={!!selectedProjectForEdit}
         onClose={() => setSelectedProjectForEdit(null)}
       />

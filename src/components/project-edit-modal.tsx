@@ -8,12 +8,14 @@ import { updateProject, deleteProject, type Project, normalizeProjectStatus, nor
 export function ProjectEditModal({
   project,
   subAdmins,
+  employees = [],
   isOpen,
   onClose,
   onSuccess,
 }: {
   project: Project | null;
-  subAdmins: { id: string; full_name: string; email?: string | null }[];
+  subAdmins?: { id: string; full_name: string; email?: string | null }[];
+  employees?: { id: string; full_name: string; email?: string | null }[];
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
@@ -29,7 +31,7 @@ export function ProjectEditModal({
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [deadline, setDeadline] = useState("");
   const [estimatedHours, setEstimatedHours] = useState<number>(0);
-  const [assignedSubAdminId, setAssignedSubAdminId] = useState("");
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
@@ -42,7 +44,7 @@ export function ProjectEditModal({
       setProgressPercent(Number(project.progress_percent || 0));
       setDeadline(project.deadline ? project.deadline.slice(0, 10) : "");
       setEstimatedHours(Number(project.estimated_hours || 0));
-      setAssignedSubAdminId(project.assigned_sub_admin_id || "");
+      setSelectedEmployeeIds((project.assigned_employees || []).map((e) => e.id));
       setErrorMsg("");
     }
   }, [project, isOpen]);
@@ -94,7 +96,7 @@ export function ProjectEditModal({
       progressPercent: Math.min(100, Math.max(0, Number(progressPercent) || 0)),
       deadline: deadline || undefined,
       estimatedHours: Math.max(0, Number(estimatedHours) || 0),
-      assignedSubAdminId: assignedSubAdminId || undefined,
+      employeeIds: selectedEmployeeIds,
     });
   };
 
@@ -109,7 +111,7 @@ export function ProjectEditModal({
             <div>
               <h3 className="text-base font-bold text-foreground">Edit Project Details</h3>
               <p className="text-xs text-muted-foreground">
-                Update project metadata, status, delivery timeline, and workforce leader.
+                Update project metadata, delivery timeline, status, and team assignments.
               </p>
             </div>
           </div>
@@ -244,21 +246,46 @@ export function ProjectEditModal({
             </div>
           </div>
 
-          <div>
-            <label className="block font-semibold text-foreground mb-1">Assigned Sub-Admin Lead</label>
-            <select
-              value={assignedSubAdminId}
-              onChange={(e) => setAssignedSubAdminId(e.target.value)}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-primary focus:outline-none"
-            >
-              <option value="">-- Unassigned --</option>
-              {subAdmins.map((sa) => (
-                <option key={sa.id} value={sa.id}>
-                  {sa.full_name} {sa.email ? `(${sa.email})` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
+          {employees && employees.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="font-semibold text-foreground">
+                  Assigned Team Employees ({selectedEmployeeIds.length})
+                </label>
+                <span className="text-[11px] text-muted-foreground">Admin direct assignment</span>
+              </div>
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-input bg-background/50 p-2 space-y-1">
+                {employees.map((emp) => {
+                  const isChecked = selectedEmployeeIds.includes(emp.id);
+                  return (
+                    <label
+                      key={emp.id}
+                      className={`flex items-center justify-between rounded-md px-2.5 py-1.5 cursor-pointer text-xs transition-colors ${
+                        isChecked ? "bg-primary/10 text-primary font-medium" : "hover:bg-secondary text-foreground"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span>{emp.full_name}</span>
+                        {emp.email && <span className="text-[10px] text-muted-foreground truncate">({emp.email})</span>}
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedEmployeeIds((prev) => [...prev, emp.id]);
+                          } else {
+                            setSelectedEmployeeIds((prev) => prev.filter((id) => id !== emp.id));
+                          }
+                        }}
+                        className="rounded border-input text-primary focus:ring-primary size-3.5"
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block font-semibold text-foreground mb-1">Project Description</label>

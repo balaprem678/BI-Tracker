@@ -99,8 +99,6 @@ function AuthPage() {
       const userRole = (data.session as any)?.user?.role || "employee";
       if (userRole === "admin") {
         navigate({ to: "/admin", replace: true });
-      } else if (userRole === "sub_admin") {
-        navigate({ to: "/project", replace: true });
       } else {
         navigate({ to: "/dashboard", replace: true });
       }

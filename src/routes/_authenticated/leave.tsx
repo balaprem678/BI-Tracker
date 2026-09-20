@@ -8,12 +8,22 @@ import {
   CheckCircle2,
   Clock,
   MessageSquareQuote,
+  Sparkles,
+  Timer,
   Trash2,
   XCircle,
 } from "lucide-react";
 import { AppShell, Panel, Stat } from "@/components/app-shell";
 import { getSessionInfo } from "@/lib/tracker.functions";
-import { cancelLeave, getMyLeaves, requestLeave } from "@/lib/leave.functions";
+import {
+  cancelLeave,
+  getMyLeaves,
+  requestLeave,
+  LeaveRequest,
+  LEAVE_TIME_SLOT_OPTIONS,
+  formatSlotDuration,
+  timeToMinutes,
+} from "@/lib/leave.functions";
 import { LEAVE_TYPES } from "@/lib/constants";
 
 export const Route = createFileRoute("/_authenticated/leave")({
@@ -70,6 +80,14 @@ function getLeaveTypeBadge(type: string) {
   return "border-border bg-secondary/70 text-foreground";
 }
 
+const PRESET_TIME_SLOTS = [
+  { label: "09:00 AM – 11:00 AM", from: "09:00 AM", to: "11:00 AM", tag: "Morning (2h)" },
+  { label: "11:00 AM – 01:00 PM", from: "11:00 AM", to: "01:00 PM", tag: "Midday (2h)" },
+  { label: "02:00 PM – 04:00 PM", from: "02:00 PM", to: "04:00 PM", tag: "Afternoon (2h)" },
+  { label: "04:00 PM – 06:00 PM", from: "04:00 PM", to: "06:00 PM", tag: "Late (2h)" },
+  { label: "06:00 PM – 09:00 PM", from: "06:00 PM", to: "09:00 PM", tag: "Evening (3h)" },
+];
+
 function LeavePage() {
   const qc = useQueryClient();
   const sessionFn = useServerFn(getSessionInfo);
@@ -84,15 +102,51 @@ function LeavePage() {
     reason: "",
   });
 
+  const [includeTimeSlot, setIncludeTimeSlot] = useState(false);
+  const [fromTime, setFromTime] = useState<string>("09:00 AM");
+  const [toTime, setToTime] = useState<string>("11:00 AM");
+
+  const handleLeaveTypeChange = (newType: string) => {
+    const isPermission = newType.toLowerCase().includes("permission");
+    setForm((prev) => ({
+      ...prev,
+      leaveType: newType,
+      endDate: isPermission ? prev.startDate : prev.endDate,
+    }));
+    if (isPermission) {
+      setIncludeTimeSlot(true);
+    }
+  };
+
+  const handleFromTimeChange = (newFrom: string) => {
+    setFromTime(newFrom);
+    const fromMin = timeToMinutes(newFrom);
+    const toMin = timeToMinutes(toTime);
+    if (toMin <= fromMin) {
+      // Find a slot 1 hour or 30 mins ahead
+      const nextSlot = LEAVE_TIME_SLOT_OPTIONS.find((t) => timeToMinutes(t) > fromMin);
+      if (nextSlot) {
+        const twoHoursLater = LEAVE_TIME_SLOT_OPTIONS.find((t) => timeToMinutes(t) >= fromMin + 120);
+        setToTime(twoHoursLater || nextSlot);
+      }
+    }
+  };
+
   const { data: session } = useQuery({ queryKey: ["session"], queryFn: () => sessionFn() });
-  const { data: leaves } = useQuery({
+  const { data: leaves } = useQuery<LeaveRequest[]>({
     queryKey: ["my-leaves"],
     queryFn: () => listFn(),
     refetchInterval: 8000,
   });
 
   const create = useMutation({
-    mutationFn: () => createFn({ data: form }),
+    mutationFn: () =>
+      createFn({
+        data: {
+          ...form,
+          ...(includeTimeSlot ? { fromTime, toTime } : {}),
+        },
+      }),
     onSuccess: (res) => {
       if (!res.ok) {
         toast.error(res.message);
@@ -121,10 +175,10 @@ function LeavePage() {
 
   if (!session) return null;
 
-  const pending = (leaves ?? []).filter((l) => l.status === "Pending").length;
-  const approved = (leaves ?? []).filter((l) => l.status === "Approved").length;
-  const rejected = (leaves ?? []).filter((l) => l.status === "Rejected").length;
-  const totalDays = (leaves ?? []).reduce((s, l) => s + days(l.start_date, l.end_date), 0);
+  const pending = (leaves ?? []).filter((l: LeaveRequest) => l.status === "Pending").length;
+  const approved = (leaves ?? []).filter((l: LeaveRequest) => l.status === "Approved").length;
+  const rejected = (leaves ?? []).filter((l: LeaveRequest) => l.status === "Rejected").length;
+  const totalDays = (leaves ?? []).reduce((s: number, l: LeaveRequest) => s + days(l.start_date, l.end_date), 0);
 
   return (
     <AppShell session={session}>
@@ -184,7 +238,7 @@ function LeavePage() {
               </span>
               <select
                 value={form.leaveType}
-                onChange={(e) => setForm({ ...form, leaveType: e.target.value })}
+                onChange={(e) => handleLeaveTypeChange(e.target.value)}
                 className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary"
               >
                 {LEAVE_TYPES.map((t) => (
@@ -194,6 +248,121 @@ function LeavePage() {
                 ))}
               </select>
             </label>
+
+            {/* Time Slot (9:00 AM – 9:00 PM) */}
+            <div className="rounded-xl border border-border/80 bg-accent/20 p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="grid size-7 place-items-center rounded-lg bg-primary/10 text-primary">
+                    <Clock className="size-3.5" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-semibold text-foreground">
+                      Time Slot (Permission)
+                    </span>
+                    <p className="text-[11px] text-muted-foreground">
+                      Available timing: 9:00 AM to 9:00 PM
+                    </p>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={includeTimeSlot}
+                    onChange={(e) => setIncludeTimeSlot(e.target.checked)}
+                    className="size-4 rounded border-border text-primary focus:ring-primary/20 accent-primary"
+                  />
+                  <span className="text-xs font-medium text-foreground">
+                    {includeTimeSlot ? "Enabled" : "Add Time Slot"}
+                  </span>
+                </label>
+              </div>
+
+              {includeTimeSlot && (
+                <div className="space-y-3 pt-1 border-t border-border/50 animate-in fade-in duration-200">
+                  {/* Quick Pick Presets */}
+                  <div>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                      Quick Pick Timings (9:00 AM – 9:00 PM)
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {PRESET_TIME_SLOTS.map((slot) => {
+                        const isSelected = fromTime === slot.from && toTime === slot.to;
+                        return (
+                          <button
+                            type="button"
+                            key={slot.label}
+                            onClick={() => {
+                              setFromTime(slot.from);
+                              setToTime(slot.to);
+                            }}
+                            className={`rounded-md px-2 py-1 text-[11px] font-medium transition-all ${
+                              isSelected
+                                ? "bg-primary text-primary-foreground shadow-sm font-semibold"
+                                : "bg-background border border-border text-muted-foreground hover:text-foreground hover:border-primary/50"
+                            }`}
+                          >
+                            {slot.from} → {slot.to}
+                            <span className="ml-1 opacity-75">({slot.tag})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* From and To dropdowns */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="text-[11px] font-semibold text-muted-foreground">
+                        From Timing (Start)
+                      </span>
+                      <select
+                        value={fromTime}
+                        onChange={(e) => handleFromTimeChange(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs font-mono outline-none transition-colors focus:border-primary"
+                      >
+                        {LEAVE_TIME_SLOT_OPTIONS.slice(0, -1).map((t) => (
+                          <option key={`from-${t}`} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className="text-[11px] font-semibold text-muted-foreground">
+                        To Timing (End)
+                      </span>
+                      <select
+                        value={toTime}
+                        onChange={(e) => setToTime(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs font-mono outline-none transition-colors focus:border-primary"
+                      >
+                        {LEAVE_TIME_SLOT_OPTIONS.filter(
+                          (t) => timeToMinutes(t) > timeToMinutes(fromTime)
+                        ).map((t) => (
+                          <option key={`to-${t}`} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  {/* Duration summary chip */}
+                  <div className="flex items-center justify-between rounded-lg bg-background/80 px-2.5 py-1.5 border border-border/60 text-xs">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Timer className="size-3.5 text-primary" />
+                      <span>Permission Duration:</span>
+                    </div>
+                    <span className="font-bold font-mono text-primary">
+                      {formatSlotDuration(fromTime, toTime)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -223,7 +392,7 @@ function LeavePage() {
         <Panel title="Leave History & Decisions" hint="Live real-time status of your requests.">
           {leaves && leaves.length > 0 ? (
             <div className="space-y-3">
-              {leaves.map((l) => {
+              {leaves.map((l: LeaveRequest) => {
                 const duration = days(l.start_date, l.end_date);
                 return (
                   <div
@@ -231,7 +400,7 @@ function LeavePage() {
                     className="flex flex-col gap-2 rounded-xl border border-border/80 bg-card p-4 transition-all hover:border-border"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-bold text-foreground text-sm">
                           {l.start_date}
                           {l.end_date !== l.start_date ? ` → ${l.end_date}` : ""}
@@ -246,6 +415,12 @@ function LeavePage() {
                         >
                           {l.leave_type}
                         </span>
+                        {l.time_slot && (
+                          <span className="inline-flex items-center gap-1 rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-xs font-semibold text-purple-600 dark:text-purple-400">
+                            <Clock className="size-3" />
+                            {l.time_slot}
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -278,9 +453,10 @@ function LeavePage() {
                       </div>
                     </div>
 
-                    {l.reason && (
+                    {(l.clean_reason || l.reason) && (
                       <p className="text-xs text-muted-foreground">
-                        <strong className="text-foreground/80 font-medium">Reason:</strong> {l.reason}
+                        <strong className="text-foreground/80 font-medium">Reason:</strong>{" "}
+                        {l.clean_reason || l.reason}
                       </p>
                     )}
 

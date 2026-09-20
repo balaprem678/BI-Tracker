@@ -265,7 +265,7 @@ export function AdminSearchBar({
       items.push({
         id: `leave-${l.id}`,
         title: `${l.employee_name || "Employee"} — ${l.leave_type}`,
-        subtitle: `${l.start_date} to ${l.end_date} · Status: ${l.status}${l.reason ? ` · "${l.reason}"` : ""}`,
+        subtitle: `${l.start_date} to ${l.end_date}${l.time_slot ? ` · 🕒 ${l.time_slot}` : ""} · Status: ${l.status}${l.clean_reason || l.reason ? ` · "${l.clean_reason || l.reason}"` : ""}`,
         category: "Leave Requests",
         badge: l.status,
         badgeColor:

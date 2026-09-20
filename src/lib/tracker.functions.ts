@@ -186,7 +186,49 @@ export const clockOut = createServerFn({ method: "POST" })
     }
 
     if (error) throw new Error(error.message);
-    return { ok: true as const, message: "Clocked Out successfully." };
+
+    // Automatically stop any running project sessions for this employee upon clock out
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+
+    const { data: userSessions } = await supabase
+      .from("project_sessions")
+      .select("*")
+      .eq("user_id", userId);
+
+    const runningSessions = (userSessions ?? []).filter(
+      (s: any) => (!s.end_time || s.status === "In Progress") && !s.daily_ended,
+    );
+
+    const stoppedProjectNames: string[] = [];
+    if (runningSessions.length > 0) {
+      for (const sess of runningSessions) {
+        const startMs = sess.start_time ? new Date(sess.start_time).getTime() : nowMs;
+        const elapsed = isNaN(startMs) ? 0 : Math.max(0, Math.floor((nowMs - startMs) / 1000));
+        const updatedDuration = (sess.duration_seconds || 0) + elapsed;
+
+        await supabase
+          .from("project_sessions")
+          .update({
+            end_time: nowIso,
+            duration_seconds: updatedDuration,
+            status: "Paused",
+            updated_at: nowIso,
+          })
+          .eq("id", sess.id);
+
+        if (sess.project_name) {
+          stoppedProjectNames.push(sess.project_name);
+        }
+      }
+    }
+
+    const message =
+      stoppedProjectNames.length > 0
+        ? `Clocked Out successfully. Running project (${stoppedProjectNames.join(", ")}) was automatically stopped.`
+        : "Clocked Out successfully.";
+
+    return { ok: true as const, message };
   });
 
 export const getShiftAnalyticsToday = createServerFn({ method: "GET" })

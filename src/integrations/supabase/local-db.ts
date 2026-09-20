@@ -93,6 +93,7 @@ export type LocalLeaveRequest = {
   end_date: string;
   leave_type: string;
   reason: string;
+  time_slot?: string | null;
   status: string;
   reviewed_by?: string | null;
   reviewed_at?: string | null;

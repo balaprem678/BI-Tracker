@@ -160,6 +160,28 @@ export const startProjectSession = createServerFn({ method: "POST" })
     const nowIso = new Date().toISOString();
     const nowMs = Date.now();
 
+    // Verify employee has an active open shift before tracking project work
+    const { data: openShift } = await supabase
+      .from("shifts")
+      .select("id")
+      .eq("user_id", userId)
+      .is("clock_out", null)
+      .maybeSingle();
+
+    if (!openShift) {
+      const { data: userRoles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+      const isAdmin = (userRoles ?? []).some((r: any) => r.role === "admin");
+      if (!isAdmin) {
+        return {
+          ok: false as const,
+          message: "You must Clock In your shift before starting project work.",
+        };
+      }
+    }
+
     const { data: activeSessions } = await supabase
       .from("project_sessions")
       .select("*")
@@ -286,7 +308,36 @@ export const endDailyProjectSession = createServerFn({ method: "POST" })
 export const endProjectForToday = endDailyProjectSession;
 export const autoStopMidnightSessions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async () => {
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+
+    const { data: activeSessions } = await supabase
+      .from("project_sessions")
+      .select("*")
+      .eq("user_id", userId);
+
+    const runningSessions = (activeSessions ?? []).filter(
+      (s: any) => (!s.end_time || s.status === "In Progress") && !s.daily_ended,
+    );
+
+    for (const sess of runningSessions) {
+      const startMs = sess.start_time ? new Date(sess.start_time).getTime() : nowMs;
+      const elapsed = isNaN(startMs) ? 0 : Math.max(0, Math.floor((nowMs - startMs) / 1000));
+      const updatedDuration = (sess.duration_seconds || 0) + elapsed;
+
+      await supabase
+        .from("project_sessions")
+        .update({
+          end_time: nowIso,
+          duration_seconds: updatedDuration,
+          status: "Paused",
+          daily_ended: true,
+          updated_at: nowIso,
+        })
+        .eq("id", sess.id);
+    }
     return { ok: true as const, message: "Midnight check completed." };
   });
 

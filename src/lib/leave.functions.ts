@@ -9,6 +9,10 @@ export type LeaveRequest = {
   end_date: string;
   leave_type: string;
   reason: string;
+  clean_reason?: string;
+  time_slot?: string | null;
+  from_time?: string | null;
+  to_time?: string | null;
   status: string;
   reviewed_by?: string | null;
   reviewed_at?: string | null;
@@ -24,9 +28,98 @@ export type LeaveRequest = {
   reviewer_name?: string | null;
 };
 
+// 30-minute time slots strictly between 9:00 AM and 9:00 PM
+export const LEAVE_TIME_SLOT_OPTIONS = [
+  "09:00 AM",
+  "09:30 AM",
+  "10:00 AM",
+  "10:30 AM",
+  "11:00 AM",
+  "11:30 AM",
+  "12:00 PM",
+  "12:30 PM",
+  "01:00 PM",
+  "01:30 PM",
+  "02:00 PM",
+  "02:30 PM",
+  "03:00 PM",
+  "03:30 PM",
+  "04:00 PM",
+  "04:30 PM",
+  "05:00 PM",
+  "05:30 PM",
+  "06:00 PM",
+  "06:30 PM",
+  "07:00 PM",
+  "07:30 PM",
+  "08:00 PM",
+  "08:30 PM",
+  "09:00 PM",
+] as const;
+
+export function timeToMinutes(timeStr: string): number {
+  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match || !match[1] || !match[2] || !match[3]) return 0;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const period = match[3].toUpperCase();
+  if (period === "AM") {
+    if (hours === 12) hours = 0;
+  } else if (period === "PM") {
+    if (hours !== 12) hours += 12;
+  }
+  return hours * 60 + minutes;
+}
+
+export function formatSlotDuration(fromTime: string, toTime: string): string {
+  const start = timeToMinutes(fromTime);
+  const end = timeToMinutes(toTime);
+  const diff = end - start;
+  if (diff <= 0) return "0 mins";
+  const hrs = Math.floor(diff / 60);
+  const mins = diff % 60;
+  if (hrs > 0 && mins > 0) {
+    return `${hrs} hr${hrs > 1 ? "s" : ""} ${mins} min${mins > 1 ? "s" : ""}`;
+  }
+  if (hrs > 0) {
+    return `${hrs} hr${hrs > 1 ? "s" : ""}`;
+  }
+  return `${mins} min${mins > 1 ? "s" : ""}`;
+}
+
+export function parseLeaveTimeSlot(reason?: string | null, rawTimeSlot?: string | null) {
+  let timeSlot: string | null = rawTimeSlot || null;
+  let cleanReason = reason || "";
+
+  if (!timeSlot && reason) {
+    const match = reason.match(/^\[Time Slot:\s*([^\]]+)\]\s*([\s\S]*)$/i);
+    if (match && match[1]) {
+      timeSlot = match[1].trim();
+      cleanReason = match[2] ? match[2].trim() : "";
+    }
+  }
+
+  let fromTime: string | null = null;
+  let toTime: string | null = null;
+  if (timeSlot) {
+    const slotMatch = timeSlot.match(/(\d{1,2}:\d{2}\s*(?:AM|PM))\s*[–-]\s*(\d{1,2}:\d{2}\s*(?:AM|PM))/i);
+    if (slotMatch && slotMatch[1] && slotMatch[2]) {
+      fromTime = slotMatch[1];
+      toTime = slotMatch[2];
+    }
+  }
+
+  return {
+    timeSlot,
+    fromTime,
+    toTime,
+    cleanReason,
+  };
+}
+
 export const getMyLeaves = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .handler(async ({ context }): Promise<LeaveRequest[]> => {
     const { data, error } = await context.supabase
       .from("leave_requests")
       .select("id, user_id, start_date, end_date, leave_type, reason, status, reviewed_by, reviewed_at, reviewer_note, created_at")
@@ -34,7 +127,16 @@ export const getMyLeaves = createServerFn({ method: "GET" })
       .order("start_date", { ascending: false })
       .limit(100);
     if (error) throw new Error(error.message);
-    return (data ?? []) as LeaveRequest[];
+    return (data ?? []).map((l: any) => {
+      const parsed = parseLeaveTimeSlot(l.reason, l.time_slot);
+      return {
+        ...l,
+        time_slot: parsed.timeSlot,
+        from_time: parsed.fromTime,
+        to_time: parsed.toTime,
+        clean_reason: parsed.cleanReason,
+      } as LeaveRequest;
+    });
   });
 
 const leaveInput = z.object({
@@ -42,6 +144,9 @@ const leaveInput = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   leaveType: z.string().trim().min(1).max(40),
   reason: z.string().trim().max(500),
+  fromTime: z.string().optional(),
+  toTime: z.string().optional(),
+  timeSlot: z.string().optional(),
 });
 
 export const requestLeave = createServerFn({ method: "POST" })
@@ -51,12 +156,42 @@ export const requestLeave = createServerFn({ method: "POST" })
     if (data.endDate < data.startDate) {
       return { ok: false as const, message: "End date is before the start date." };
     }
+
+    let fullReason = data.reason;
+    let slotStr: string | null = null;
+
+    if (data.fromTime && data.toTime) {
+      const startMin = timeToMinutes(data.fromTime);
+      const endMin = timeToMinutes(data.toTime);
+
+      // Business hours constraint: 9:00 AM (540m) to 9:00 PM (1260m)
+      if (startMin < 540 || endMin > 1260) {
+        return {
+          ok: false as const,
+          message: "Time slot must be within working hours (09:00 AM to 09:00 PM).",
+        };
+      }
+      if (endMin <= startMin) {
+        return {
+          ok: false as const,
+          message: "End time must be after start time.",
+        };
+      }
+
+      const durationStr = formatSlotDuration(data.fromTime, data.toTime);
+      slotStr = `${data.fromTime} – ${data.toTime} (${durationStr})`;
+      fullReason = `[Time Slot: ${slotStr}] ${data.reason}`.trim();
+    } else if (data.timeSlot) {
+      slotStr = data.timeSlot;
+      fullReason = `[Time Slot: ${slotStr}] ${data.reason}`.trim();
+    }
+
     const { error } = await context.supabase.from("leave_requests").insert({
       user_id: context.userId,
       start_date: data.startDate,
       end_date: data.endDate,
       leave_type: data.leaveType,
-      reason: data.reason,
+      reason: fullReason,
       status: "Pending",
     });
     if (error) throw new Error(error.message);
@@ -141,9 +276,14 @@ export const getAllLeaveRequests = createServerFn({ method: "POST" })
     const enriched: LeaveRequest[] = (leaves ?? []).map((l: any) => {
       const emp = profileMap.get(l.user_id);
       const reviewer = l.reviewed_by ? profileMap.get(l.reviewed_by) : null;
+      const parsed = parseLeaveTimeSlot(l.reason, l.time_slot);
 
       return {
         ...l,
+        time_slot: parsed.timeSlot,
+        from_time: parsed.fromTime,
+        to_time: parsed.toTime,
+        clean_reason: parsed.cleanReason,
         employee_name: emp?.full_name ?? "Unknown Employee",
         employee_email: emp?.email ?? "",
         employee_job_title: emp?.job_title ?? null,
@@ -171,6 +311,7 @@ export const getAllLeaveRequests = createServerFn({ method: "POST" })
           l.employee_name?.toLowerCase().includes(q) ||
           l.employee_email?.toLowerCase().includes(q) ||
           l.reason?.toLowerCase().includes(q) ||
+          l.time_slot?.toLowerCase().includes(q) ||
           l.leave_type?.toLowerCase().includes(q),
       );
     }
@@ -213,8 +354,13 @@ export const getPendingLeaveNotifications = createServerFn({ method: "GET" })
 
     const recentPending: LeaveRequest[] = (pendingLeaves ?? []).slice(0, 8).map((l: any) => {
       const emp = profileMap.get(l.user_id);
+      const parsed = parseLeaveTimeSlot(l.reason, l.time_slot);
       return {
         ...l,
+        time_slot: parsed.timeSlot,
+        from_time: parsed.fromTime,
+        to_time: parsed.toTime,
+        clean_reason: parsed.cleanReason,
         employee_name: emp?.full_name ?? "Unknown Employee",
         employee_email: emp?.email ?? "",
         employee_department: emp?.department ?? null,

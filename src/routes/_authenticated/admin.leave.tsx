@@ -411,12 +411,18 @@ function AdminLeavePage() {
                           <div className="text-[11px] text-muted-foreground">
                             {formatDate(leave.start_date)} → {formatDate(leave.end_date)}
                           </div>
+                          {leave.time_slot && (
+                            <div className="mt-1 inline-flex items-center gap-1 rounded-md border border-purple-500/25 bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-purple-600 dark:text-purple-400">
+                              <Clock className="size-2.5" />
+                              {leave.time_slot}
+                            </div>
+                          )}
                         </td>
 
                         {/* Reason */}
                         <td className="py-3.5 max-w-xs">
                           <p className="text-xs text-foreground line-clamp-2">
-                            {leave.reason || "—"}
+                            {leave.clean_reason || leave.reason || "—"}
                           </p>
                         </td>
 
@@ -648,12 +654,30 @@ function AdminLeavePage() {
               </div>
             </div>
 
+            {selectedLeave.time_slot && (
+              <div className="rounded-lg border border-purple-500/30 bg-purple-500/10 p-3.5 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="grid size-7 place-items-center rounded-md bg-purple-500/20 text-purple-600 dark:text-purple-400">
+                    <Clock className="size-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                      Permission Timing (9:00 AM – 9:00 PM)
+                    </span>
+                    <p className="text-xs font-bold text-foreground font-mono mt-0.5">
+                      {selectedLeave.time_slot}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="rounded-lg border border-border/60 bg-background/50 p-4 space-y-1">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Reason for Leave
               </span>
               <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">
-                {selectedLeave.reason || "No reason specified."}
+                {selectedLeave.clean_reason || selectedLeave.reason || "No reason specified."}
               </p>
             </div>
 

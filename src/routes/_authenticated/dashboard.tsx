@@ -197,6 +197,8 @@ function Dashboard() {
       }
       qc.invalidateQueries({ queryKey: ["my-shifts"] });
       qc.invalidateQueries({ queryKey: ["shift-analytics-today"] });
+      qc.invalidateQueries({ queryKey: ["my-project-sessions"] });
+      qc.invalidateQueries({ queryKey: ["my-projects"] });
     },
     onError: (err: any) => toast.error(err.message || "Could not update shift status."),
   });
@@ -586,12 +588,16 @@ function Dashboard() {
                   ) : (
                     <div className="flex gap-2">
                       <button
-                        onClick={() =>
+                        onClick={() => {
+                          if (!openShift) {
+                            toast.error("You must Clock In your shift before starting project work.");
+                            return;
+                          }
                           startMutation.mutate({
                             projectId: proj.id,
                             projectName: proj.name,
-                          })
-                        }
+                          });
+                        }}
                         disabled={startMutation.isPending}
                         className="flex-1 flex items-center justify-center gap-1.5 rounded-lg glow-primary bg-primary py-2.5 text-xs font-bold text-primary-foreground hover:brightness-110 active:scale-[0.98] transition-all shadow-sm"
                       >

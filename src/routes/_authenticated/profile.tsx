@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Save,
@@ -14,10 +14,16 @@ import {
   Eye,
   EyeOff,
   ShieldAlert,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  MessageSquareQuote,
+  ArrowRight,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
-import { getSessionInfo } from "@/lib/tracker.functions";
+import { getSessionInfo, getMyShifts, type Shift } from "@/lib/tracker.functions";
 import { getMyProfile, updateMyProfile, type MyProfile } from "@/lib/profile.functions";
+import { getMyLeaves, type LeaveRequest } from "@/lib/leave.functions";
 import { LEAVE_TYPES } from "@/lib/constants";
 
 export const Route = createFileRoute("/_authenticated/profile")({
@@ -34,7 +40,34 @@ export const Route = createFileRoute("/_authenticated/profile")({
   component: ProfilePage,
 });
 
-// ---------- small reusable components ----------
+// ---------- small reusable components & helpers ----------
+
+function calculateDays(start: string, end: string) {
+  if (!start || !end) return 1;
+  const s = new Date(start).getTime();
+  const e = new Date(end).getTime();
+  return Math.max(1, Math.round((e - s) / 86_400_000) + 1);
+}
+
+function getLeaveTypeBadge(type: string) {
+  const norm = (type || "").toLowerCase();
+  if (norm.includes("casual")) {
+    return "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400";
+  }
+  if (norm.includes("sick")) {
+    return "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400";
+  }
+  if (norm.includes("emergency")) {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+  }
+  if (norm.includes("permission")) {
+    return "border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400";
+  }
+  if (norm.includes("wfh") || norm.includes("home")) {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+  }
+  return "border-border bg-secondary/70 text-foreground";
+}
 
 function SectionCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
@@ -132,7 +165,17 @@ function SelectField({
   );
 }
 
-function StatCard({ label, value, color = "default" }: { label: string; value: string | number; color?: "default" | "green" | "red" | "amber" }) {
+function StatCard({
+  label,
+  value,
+  color = "default",
+  subtext,
+}: {
+  label: string;
+  value: string | number;
+  color?: "default" | "green" | "red" | "amber";
+  subtext?: string | undefined;
+}) {
   const colorMap = {
     default: "bg-muted text-foreground",
     green: "bg-emerald-500/10 text-emerald-600",
@@ -142,7 +185,8 @@ function StatCard({ label, value, color = "default" }: { label: string; value: s
   return (
     <div className={`rounded-lg p-4 text-center ${colorMap[color]}`}>
       <div className="text-2xl font-bold tabular-nums">{value}</div>
-      <div className="mt-1 text-xs opacity-75">{label}</div>
+      <div className="mt-1 text-xs opacity-75 font-medium truncate">{label}</div>
+      {subtext && <div className="mt-0.5 text-[10px] font-semibold opacity-70 truncate">{subtext}</div>}
     </div>
   );
 }
@@ -206,6 +250,23 @@ function ProfilePage() {
     enabled: isEmployee,
   });
 
+  const leavesFn = useServerFn(getMyLeaves);
+  const shiftsFn = useServerFn(getMyShifts);
+
+  const leavesQuery = useQuery<LeaveRequest[]>({
+    queryKey: ["my-leaves"],
+    queryFn: () => leavesFn(),
+    enabled: isEmployee,
+    refetchInterval: 8000,
+  });
+
+  const shiftsQuery = useQuery<Shift[]>({
+    queryKey: ["my-shifts"],
+    queryFn: () => shiftsFn(),
+    enabled: isEmployee,
+    refetchInterval: 10000,
+  });
+
   // Redirect admins and sub-admins away from employee profile
   useEffect(() => {
     if (!session.data) return;
@@ -247,6 +308,99 @@ function ProfilePage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const profileData = profile.data;
+  const employeeId = profileData?.employee_id || profileData?.id?.slice(-8).toUpperCase() || "—";
+
+  // Derived leave/attendance stats from profile created_at date
+  const joiningDate = profileData?.joining_date
+    ? new Date(profileData.joining_date)
+    : profileData?.created_at
+      ? new Date(profileData.created_at)
+      : null;
+  const daysWorked = joiningDate
+    ? Math.max(0, Math.floor((Date.now() - joiningDate.getTime()) / 86400000))
+    : 0;
+
+  const myLeaves = useMemo(() => leavesQuery.data ?? [], [leavesQuery.data]);
+  const myShifts = useMemo(() => shiftsQuery.data ?? [], [shiftsQuery.data]);
+
+  // Unique calendar days on which employee clocked in
+  const uniqueShiftDays = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of myShifts) {
+      if (s.clock_in) {
+        set.add(s.clock_in.slice(0, 10));
+      }
+    }
+    return set.size;
+  }, [myShifts]);
+
+  // Present Days: actual unique clocked-in days
+  const presentDays = uniqueShiftDays > 0 ? uniqueShiftDays : (myShifts.length > 0 ? myShifts.length : (daysWorked > 0 ? daysWorked : 0));
+
+  // Approved leave days
+  const approvedLeaves = useMemo(() => {
+    return myLeaves.filter((l) => l.status === "Approved");
+  }, [myLeaves]);
+
+  const totalApprovedLeaveDays = useMemo(() => {
+    return approvedLeaves.reduce((sum, l) => sum + calculateDays(l.start_date, l.end_date), 0);
+  }, [approvedLeaves]);
+
+  // Absent days: days elapsed minus present days minus approved leaves
+  const absentDays = Math.max(0, daysWorked - presentDays - totalApprovedLeaveDays);
+
+  // Late days: shifts where clock_in hour > 10 AM
+  const lateDays = useMemo(() => {
+    let count = 0;
+    for (const s of myShifts) {
+      if (s.clock_in) {
+        const d = new Date(s.clock_in);
+        if (d.getHours() > 10 || (d.getHours() === 10 && d.getMinutes() > 0)) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }, [myShifts]);
+
+  // Breakdown by leave type
+  const leaveStatsByType = useMemo(() => {
+    const map: Record<string, { approvedDays: number; pendingDays: number; totalDays: number; count: number }> = {};
+    for (const type of LEAVE_TYPES) {
+      map[type] = { approvedDays: 0, pendingDays: 0, totalDays: 0, count: 0 };
+    }
+
+    for (const l of myLeaves) {
+      const lDays = calculateDays(l.start_date, l.end_date);
+      const lType = l.leave_type || "";
+      const norm = lType.toLowerCase();
+
+      let matchedKey = LEAVE_TYPES.find((t) => {
+        const tNorm = t.toLowerCase();
+        if (tNorm === "casual leave") return norm.includes("casual");
+        if (tNorm === "sick") return norm.includes("sick");
+        if (tNorm === "emergency") return norm.includes("emergency");
+        if (tNorm === "permission") return norm.includes("permission");
+        if (tNorm === "wfh") return norm.includes("wfh") || norm.includes("home");
+        return tNorm === norm;
+      }) || "Others";
+
+      if (!map[matchedKey]) {
+        map[matchedKey] = { approvedDays: 0, pendingDays: 0, totalDays: 0, count: 0 };
+      }
+
+      map[matchedKey].count += 1;
+      map[matchedKey].totalDays += lDays;
+      if (l.status === "Approved") {
+        map[matchedKey].approvedDays += lDays;
+      } else if (l.status === "Pending") {
+        map[matchedKey].pendingDays += lDays;
+      }
+    }
+    return map;
+  }, [myLeaves]);
+
   if (!session.data) return null;
 
   // Admins do not have or need an employee profile
@@ -265,19 +419,6 @@ function ProfilePage() {
       </AppShell>
     );
   }
-
-  const profileData = profile.data;
-  const employeeId = profileData?.employee_id || profileData?.id?.slice(-8).toUpperCase() || "—";
-
-  // Derived leave/attendance stats from profile created_at date
-  const joiningDate = profileData?.joining_date
-    ? new Date(profileData.joining_date)
-    : profileData?.created_at
-      ? new Date(profileData.created_at)
-      : null;
-  const daysWorked = joiningDate
-    ? Math.max(0, Math.floor((Date.now() - joiningDate.getTime()) / 86400000))
-    : 0;
 
   return (
     <AppShell session={session.data}>
@@ -499,34 +640,145 @@ function ProfilePage() {
               <SectionTitle
                 icon={<CalendarDays className="size-4" />}
                 title="Attendance Overview"
-                hint="Derived from your shift records."
+                hint="Derived from your shift records and leave approvals."
               />
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <StatCard label="Days Since Joining" value={daysWorked} color="default" />
-                <StatCard label="Present Days" value={daysWorked} color="green" />
-                <StatCard label="Absent Days" value={0} color="red" />
-                <StatCard label="Late Days" value={0} color="amber" />
+                <StatCard label="Present Days" value={presentDays} color="green" />
+                <StatCard label="Absent Days" value={absentDays} color="red" />
+                <StatCard label="Late Days" value={lateDays} color="amber" />
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                {LEAVE_TYPES.map((type) => (
-                  <StatCard key={type} label={type} value={0} color="default" />
-                ))}
+                {LEAVE_TYPES.map((type) => {
+                  const stats = leaveStatsByType[type] || { approvedDays: 0, pendingDays: 0, totalDays: 0, count: 0 };
+                  const value = stats.approvedDays > 0 ? stats.approvedDays : stats.pendingDays > 0 ? stats.pendingDays : 0;
+                  const subtext =
+                    stats.pendingDays > 0
+                      ? `${stats.pendingDays} pending`
+                      : stats.approvedDays > 0
+                        ? `${stats.approvedDays} approved`
+                        : undefined;
+
+                  return (
+                    <StatCard
+                      key={type}
+                      label={type}
+                      value={value}
+                      subtext={subtext}
+                      color={stats.approvedDays > 0 ? "green" : stats.pendingDays > 0 ? "amber" : "default"}
+                    />
+                  );
+                })}
               </div>
             </SectionCard>
 
             <SectionCard>
-              <SectionTitle
-                icon={<CalendarDays className="size-4" />}
-                title="Leave History"
-                hint="All leave requests submitted by you."
-              />
-              <p className="text-sm text-muted-foreground">
-                View and manage your leave requests on the{" "}
-                <a href="/leave" className="text-primary underline underline-offset-2">
-                  Leave page
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <SectionTitle
+                  icon={<CalendarDays className="size-4" />}
+                  title="Leave History & Decisions"
+                  hint="All leave requests submitted by you and their live real-time status."
+                />
+                <a
+                  href="/leave"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-all hover:bg-primary/20"
+                >
+                  <span>Apply for Leave</span>
+                  <ArrowRight className="size-3.5" />
                 </a>
-                .
-              </p>
+              </div>
+
+              {leavesQuery.isLoading ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  Loading leave records…
+                </div>
+              ) : myLeaves.length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground space-y-2">
+                  <CalendarDays className="mx-auto size-7 text-muted-foreground/60" />
+                  <p className="font-semibold text-foreground">No leave requests submitted yet.</p>
+                  <p>When you submit a leave request, its status and details will update here in real-time.</p>
+                  <a
+                    href="/leave"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline mt-1"
+                  >
+                    Go to Leave Page →
+                  </a>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {myLeaves.map((l) => {
+                    const duration = calculateDays(l.start_date, l.end_date);
+                    return (
+                      <div
+                        key={l.id}
+                        className="flex flex-col gap-2 rounded-xl border border-border/80 bg-background/60 p-4 transition-all hover:border-border"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-foreground text-sm">
+                              {l.start_date}
+                              {l.end_date !== l.start_date ? ` → ${l.end_date}` : ""}
+                            </span>
+                            <span className="text-xs text-muted-foreground font-medium">
+                              ({duration} {duration === 1 ? "day" : "days"})
+                            </span>
+                            <span
+                              className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${getLeaveTypeBadge(
+                                l.leave_type
+                              )}`}
+                            >
+                              {l.leave_type}
+                            </span>
+                            {l.time_slot && (
+                              <span className="inline-flex items-center gap-1 rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-xs font-semibold text-purple-600 dark:text-purple-400">
+                                <Clock className="size-3" />
+                                {l.time_slot}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {l.status === "Approved" ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                                <CheckCircle2 className="size-3" />
+                                Approved
+                              </span>
+                            ) : l.status === "Rejected" ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 px-2.5 py-0.5 text-xs font-semibold text-destructive">
+                                <XCircle className="size-3" />
+                                Rejected
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                                <Clock className="size-3" />
+                                Pending Review
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {(l.clean_reason || l.reason) && (
+                          <p className="text-xs text-muted-foreground">
+                            <strong className="text-foreground/80 font-medium">Reason:</strong>{" "}
+                            {l.clean_reason || l.reason}
+                          </p>
+                        )}
+
+                        {/* Manager Feedback */}
+                        {l.reviewer_note && (
+                          <div className="mt-1 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-2.5 text-xs text-foreground">
+                            <MessageSquareQuote className="size-4 shrink-0 text-primary mt-0.5" />
+                            <div>
+                              <p className="font-semibold text-primary">Manager Feedback:</p>
+                              <p className="text-muted-foreground mt-0.5">{l.reviewer_note}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </SectionCard>
           </div>
         )}

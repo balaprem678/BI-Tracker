@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -22,9 +22,15 @@ import {
   Loader2,
   X,
   Check,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  MessageSquareQuote,
+  ArrowRight,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionInfo } from "@/lib/tracker.functions";
+import { getEmployeeAllData } from "@/lib/team.functions";
 import {
   getEmployeeProfileById,
   updateMyProfile,
@@ -44,6 +50,33 @@ export const Route = createFileRoute("/_authenticated/admin/employee/$id")({
 });
 
 // ---- reusable field components (same as profile.tsx) ----
+
+function calculateDays(start: string, end: string) {
+  if (!start || !end) return 1;
+  const s = new Date(start).getTime();
+  const e = new Date(end).getTime();
+  return Math.max(1, Math.round((e - s) / 86_400_000) + 1);
+}
+
+function getLeaveTypeBadge(type: string) {
+  const norm = (type || "").toLowerCase();
+  if (norm.includes("casual")) {
+    return "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400";
+  }
+  if (norm.includes("sick")) {
+    return "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400";
+  }
+  if (norm.includes("emergency")) {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+  }
+  if (norm.includes("permission")) {
+    return "border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400";
+  }
+  if (norm.includes("wfh") || norm.includes("home")) {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+  }
+  return "border-border bg-secondary/70 text-foreground";
+}
 
 function SectionCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
@@ -201,6 +234,14 @@ function AdminEmployeeProfile() {
     enabled: !!id,
   });
 
+  const getAllDataFn = useServerFn(getEmployeeAllData);
+  const allDataQuery = useQuery({
+    queryKey: ["employee-all-data", id],
+    queryFn: () => getAllDataFn({ data: { employeeId: id } }),
+    enabled: !!id,
+    refetchInterval: 10000,
+  });
+
   const [activeTab, setActiveTab] = useState<Tab>("basic");
   const [form, setForm] = useState(initForm(null));
   const [showSalary, setShowSalary] = useState(false);
@@ -336,6 +377,80 @@ function AdminEmployeeProfile() {
   const daysWorked = joiningDate
     ? Math.max(0, Math.floor((Date.now() - joiningDate.getTime()) / 86400000))
     : 0;
+
+  const empLeaves = useMemo(() => allDataQuery.data?.leaves ?? [], [allDataQuery.data?.leaves]);
+  const empShifts = useMemo(() => allDataQuery.data?.shifts ?? [], [allDataQuery.data?.shifts]);
+
+  const uniqueShiftDays = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of empShifts) {
+      if (s.clockIn) {
+        set.add(s.clockIn.slice(0, 10));
+      }
+    }
+    return set.size;
+  }, [empShifts]);
+
+  const presentDays = uniqueShiftDays > 0 ? uniqueShiftDays : (empShifts.length > 0 ? empShifts.length : (daysWorked > 0 ? daysWorked : 0));
+
+  const approvedLeaves = useMemo(() => {
+    return empLeaves.filter((l) => l.status === "Approved");
+  }, [empLeaves]);
+
+  const totalApprovedLeaveDays = useMemo(() => {
+    return approvedLeaves.reduce((sum, l) => sum + calculateDays(l.startDate, l.endDate), 0);
+  }, [approvedLeaves]);
+
+  const absentDays = Math.max(0, daysWorked - presentDays - totalApprovedLeaveDays);
+
+  const lateDays = useMemo(() => {
+    let count = 0;
+    for (const s of empShifts) {
+      if (s.clockIn) {
+        const d = new Date(s.clockIn);
+        if (d.getHours() > 10 || (d.getHours() === 10 && d.getMinutes() > 0)) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }, [empShifts]);
+
+  const leaveStatsByType = useMemo(() => {
+    const map: Record<string, { approvedDays: number; pendingDays: number; totalDays: number; count: number }> = {};
+    for (const type of LEAVE_TYPES) {
+      map[type] = { approvedDays: 0, pendingDays: 0, totalDays: 0, count: 0 };
+    }
+
+    for (const l of empLeaves) {
+      const lDays = calculateDays(l.startDate, l.endDate);
+      const lType = l.leaveType || "";
+      const norm = lType.toLowerCase();
+
+      let matchedKey = LEAVE_TYPES.find((t) => {
+        const tNorm = t.toLowerCase();
+        if (tNorm === "casual leave") return norm.includes("casual");
+        if (tNorm === "sick") return norm.includes("sick");
+        if (tNorm === "emergency") return norm.includes("emergency");
+        if (tNorm === "permission") return norm.includes("permission");
+        if (tNorm === "wfh") return norm.includes("wfh") || norm.includes("home");
+        return tNorm === norm;
+      }) || "Others";
+
+      if (!map[matchedKey]) {
+        map[matchedKey] = { approvedDays: 0, pendingDays: 0, totalDays: 0, count: 0 };
+      }
+
+      map[matchedKey].count += 1;
+      map[matchedKey].totalDays += lDays;
+      if (l.status === "Approved") {
+        map[matchedKey].approvedDays += lDays;
+      } else if (l.status === "Pending") {
+        map[matchedKey].pendingDays += lDays;
+      }
+    }
+    return map;
+  }, [empLeaves]);
 
   const toggleActiveFn = useServerFn(toggleEmployeeActive);
 
@@ -693,41 +808,176 @@ function AdminEmployeeProfile() {
         )}
 
         {activeTab === "leave" && (
-          <SectionCard>
-            <SectionTitle icon={<CalendarDays className="size-4" />} title="Attendance Overview" />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {[
-                { label: "Days Since Joining", value: daysWorked, color: "default" },
-                { label: "Present Days", value: daysWorked, color: "green" },
-                { label: "Absent Days", value: 0, color: "red" },
-                { label: "Late Days", value: 0, color: "amber" },
-              ].map((s) => (
-                <div
-                  key={s.label}
-                  className={`rounded-lg p-4 text-center ${
-                    s.color === "green"
-                      ? "bg-emerald-500/10 text-emerald-600"
-                      : s.color === "red"
-                        ? "bg-red-500/10 text-red-600"
-                        : s.color === "amber"
-                          ? "bg-amber-500/10 text-amber-600"
-                          : "bg-muted"
-                  }`}
+          <div className="space-y-5">
+            <SectionCard>
+              <SectionTitle
+                icon={<CalendarDays className="size-4" />}
+                title="Attendance Overview"
+                hint="Derived from employee shift records and approved leaves."
+              />
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {[
+                  { label: "Days Since Joining", value: daysWorked, color: "default" },
+                  { label: "Present Days", value: presentDays, color: "green" },
+                  { label: "Absent Days", value: absentDays, color: "red" },
+                  { label: "Late Days", value: lateDays, color: "amber" },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className={`rounded-lg p-4 text-center ${
+                      s.color === "green"
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : s.color === "red"
+                          ? "bg-red-500/10 text-red-600"
+                          : s.color === "amber"
+                            ? "bg-amber-500/10 text-amber-600"
+                            : "bg-muted"
+                    }`}
+                  >
+                    <div className="text-2xl font-bold tabular-nums">{s.value}</div>
+                    <div className="mt-1 text-xs opacity-75">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {LEAVE_TYPES.map((type) => {
+                  const stats = leaveStatsByType[type] || { approvedDays: 0, pendingDays: 0, totalDays: 0, count: 0 };
+                  const value = stats.approvedDays > 0 ? stats.approvedDays : stats.pendingDays > 0 ? stats.pendingDays : 0;
+                  const isApproved = stats.approvedDays > 0;
+                  const isPending = stats.pendingDays > 0;
+
+                  return (
+                    <div
+                      key={type}
+                      className={`rounded-lg p-3.5 text-center transition-all ${
+                        isApproved
+                          ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+                          : isPending
+                            ? "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                            : "bg-muted"
+                      }`}
+                    >
+                      <div className="text-xl font-bold tabular-nums">{value}</div>
+                      <div className="mt-1 text-xs opacity-75 truncate">{type}</div>
+                      {isPending && (
+                        <div className="mt-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-400">
+                          {stats.pendingDays} pending
+                        </div>
+                      )}
+                      {!isPending && isApproved && (
+                        <div className="mt-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          {stats.approvedDays} approved
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </SectionCard>
+
+            <SectionCard>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <SectionTitle
+                  icon={<CalendarDays className="size-4" />}
+                  title="Leave History & Decisions"
+                  hint="All leave requests submitted by this employee."
+                />
+                <Link
+                  to="/admin/leave"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-all hover:bg-primary/20"
                 >
-                  <div className="text-2xl font-bold tabular-nums">{s.value}</div>
-                  <div className="mt-1 text-xs opacity-75">{s.label}</div>
+                  <span>Manage in Leave Console</span>
+                  <ArrowRight className="size-3.5" />
+                </Link>
+              </div>
+
+              {allDataQuery.isLoading ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  Loading leave records…
                 </div>
-              ))}
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              {LEAVE_TYPES.map((l) => (
-                <div key={l} className="rounded-lg bg-muted p-3.5 text-center">
-                  <div className="text-xl font-bold">0</div>
-                  <div className="mt-1 text-xs opacity-75 truncate">{l}</div>
+              ) : empLeaves.length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground space-y-2">
+                  <CalendarDays className="mx-auto size-7 text-muted-foreground/60" />
+                  <p className="font-semibold text-foreground">No leave requests found for this employee.</p>
+                  <p>When the employee submits a leave request, it will appear here for review.</p>
                 </div>
-              ))}
-            </div>
-          </SectionCard>
+              ) : (
+                <div className="space-y-3">
+                  {empLeaves.map((l) => {
+                    const duration = calculateDays(l.startDate, l.endDate);
+                    return (
+                      <div
+                        key={l.id}
+                        className="flex flex-col gap-2 rounded-xl border border-border/80 bg-background/60 p-4 transition-all hover:border-border"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-foreground text-sm">
+                              {l.startDate}
+                              {l.endDate !== l.startDate ? ` → ${l.endDate}` : ""}
+                            </span>
+                            <span className="text-xs text-muted-foreground font-medium">
+                              ({duration} {duration === 1 ? "day" : "days"})
+                            </span>
+                            <span
+                              className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${getLeaveTypeBadge(
+                                l.leaveType
+                              )}`}
+                            >
+                              {l.leaveType}
+                            </span>
+                            {l.timeSlot && (
+                              <span className="inline-flex items-center gap-1 rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-xs font-semibold text-purple-600 dark:text-purple-400">
+                                <Clock className="size-3" />
+                                {l.timeSlot}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {l.status === "Approved" ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                                <CheckCircle2 className="size-3" />
+                                Approved
+                              </span>
+                            ) : l.status === "Rejected" ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 px-2.5 py-0.5 text-xs font-semibold text-destructive">
+                                <XCircle className="size-3" />
+                                Rejected
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+                                <Clock className="size-3" />
+                                Pending Review
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {(l.cleanReason || l.reason) && (
+                          <p className="text-xs text-muted-foreground">
+                            <strong className="text-foreground/80 font-medium">Reason:</strong>{" "}
+                            {l.cleanReason || l.reason}
+                          </p>
+                        )}
+
+                        {/* Manager Feedback */}
+                        {l.reviewerNote && (
+                          <div className="mt-1 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 p-2.5 text-xs text-foreground">
+                            <MessageSquareQuote className="size-4 shrink-0 text-primary mt-0.5" />
+                            <div>
+                              <p className="font-semibold text-primary">Manager Feedback:</p>
+                              <p className="text-muted-foreground mt-0.5">{l.reviewerNote}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </SectionCard>
+          </div>
         )}
 
         {activeTab === "salary" && (

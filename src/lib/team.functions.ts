@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { parseLeaveTimeSlot } from "@/lib/leave.functions";
 
 async function assertAdmin(context: { supabase: any; userId: string }) {
   const { data, error } = await context.supabase.rpc("has_role", {
@@ -65,7 +66,10 @@ export type EmployeeLeave = {
   endDate: string;
   leaveType: string;
   reason: string;
+  cleanReason?: string;
+  timeSlot?: string | null;
   status: string;
+  reviewerNote?: string | null;
   daysCount: number;
   createdAt: string;
 };
@@ -294,7 +298,7 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
         .order("hour_slot", { ascending: false }),
       context.supabase
         .from("leave_requests")
-        .select("id, start_date, end_date, leave_type, reason, status, created_at")
+        .select("id, start_date, end_date, leave_type, reason, status, reviewer_note, time_slot, created_at")
         .eq("user_id", employeeId)
         .order("start_date", { ascending: false }),
     ]);
@@ -421,13 +425,17 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
       if (lv.status?.toLowerCase() === "approved" || lv.status?.toLowerCase() === "pending") {
         totalLeaveDays += daysCount;
       }
+      const parsed = parseLeaveTimeSlot(lv.reason, lv.time_slot);
       return {
         id: lv.id,
         startDate: lv.start_date,
         endDate: lv.end_date,
         leaveType: lv.leave_type,
         reason: lv.reason ?? "",
+        cleanReason: parsed.cleanReason,
+        timeSlot: parsed.timeSlot,
         status: lv.status ?? "Pending",
+        reviewerNote: lv.reviewer_note ?? null,
         daysCount,
         createdAt: lv.created_at,
       };

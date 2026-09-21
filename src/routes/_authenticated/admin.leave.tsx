@@ -20,6 +20,8 @@ import {
   ArrowRight,
   Shield,
   UserCheck,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { AppShell, Panel, Stat } from "@/components/app-shell";
 import { getSessionInfo } from "@/lib/tracker.functions";
@@ -102,6 +104,13 @@ function AdminLeavePage() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 10;
+
+  // Reset pagination to page 1 on filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, staffSectionFilter, leaveTypeFilter, startDate, endDate, searchQuery]);
 
   // Modals state
   const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
@@ -165,6 +174,14 @@ function AdminLeavePage() {
   });
 
   const leavesList = leaveData?.leaves ?? [];
+
+  const totalItems = leavesList.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const validCurrentPage = Math.min(currentPage, totalPages);
+  const startIdx = (validCurrentPage - 1) * pageSize;
+  const paginatedLeaves = useMemo(() => {
+    return leavesList.slice(startIdx, startIdx + pageSize);
+  }, [leavesList, startIdx, pageSize]);
 
   const totalDaysRequested = useMemo(() => {
     return leavesList.reduce((acc, l) => acc + calculateDays(l.start_date, l.end_date), 0);
@@ -337,7 +354,8 @@ function AdminLeavePage() {
               <p className="text-xs">Adjust your filters or wait for new submissions.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -351,7 +369,7 @@ function AdminLeavePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60 font-medium">
-                  {leavesList.map((leave) => {
+                  {paginatedLeaves.map((leave) => {
                     const days = calculateDays(leave.start_date, leave.end_date);
                     const isIT =
                       leave.employee_staff_section === "IT Team" ||
@@ -498,7 +516,58 @@ function AdminLeavePage() {
                 </tbody>
               </table>
             </div>
-          )}
+
+            {/* Table Pagination Footer */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border/60 text-xs text-muted-foreground">
+              <div>
+                Showing <span className="font-bold text-foreground">{totalItems === 0 ? 0 : startIdx + 1}</span>–
+                <span className="font-bold text-foreground">
+                  {Math.min(startIdx + pageSize, totalItems)}
+                </span>{" "}
+                of <span className="font-bold text-foreground">{totalItems}</span> requests
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={validCurrentPage <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className="flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1 font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <ChevronLeft className="size-3.5" />
+                    Prev
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setCurrentPage(p)}
+                      className={`size-7 rounded-md text-xs font-semibold transition-all ${
+                        validCurrentPage === p
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    disabled={validCurrentPage >= totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className="flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1 font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next
+                    <ChevronRight className="size-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
         </Panel>
       </div>
 

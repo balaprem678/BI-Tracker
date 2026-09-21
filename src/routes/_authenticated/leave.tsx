@@ -1,16 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
+  Filter,
   MessageSquareQuote,
+  RotateCcw,
+  Search,
   Sparkles,
   Timer,
   Trash2,
+  X,
   XCircle,
 } from "lucide-react";
 import { AppShell, Panel, Stat } from "@/components/app-shell";
@@ -106,6 +112,32 @@ function LeavePage() {
   const [fromTime, setFromTime] = useState<string>("09:00 AM");
   const [toTime, setToTime] = useState<string>("11:00 AM");
 
+  // Filter and Pagination State for Leave History
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedLeaveType, setSelectedLeaveType] = useState("all");
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 5;
+
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setSelectedStatus("all");
+    setSelectedLeaveType("all");
+    setFilterStartDate("");
+    setFilterEndDate("");
+    setCurrentPage(1);
+  };
+
+  const isFiltered = Boolean(
+    searchQuery.trim() ||
+      selectedStatus !== "all" ||
+      selectedLeaveType !== "all" ||
+      filterStartDate ||
+      filterEndDate
+  );
+
   const handleLeaveTypeChange = (newType: string) => {
     const isPermission = newType.toLowerCase().includes("permission");
     setForm((prev) => ({
@@ -138,6 +170,66 @@ function LeavePage() {
     queryFn: () => listFn(),
     refetchInterval: 8000,
   });
+
+  const filteredLeaves = useMemo(() => {
+    if (!leaves) return [];
+    return leaves.filter((l: LeaveRequest) => {
+      // Status Filter
+      if (selectedStatus !== "all" && l.status !== selectedStatus) {
+        return false;
+      }
+
+      // Leave Type Filter
+      if (selectedLeaveType !== "all") {
+        const typeNorm = (l.leave_type || "").toLowerCase();
+        const filterNorm = selectedLeaveType.toLowerCase();
+        if (filterNorm === "casual leave") {
+          if (!typeNorm.includes("casual")) return false;
+        } else if (filterNorm === "wfh") {
+          if (!typeNorm.includes("wfh") && !typeNorm.includes("home")) return false;
+        } else if (filterNorm === "sick") {
+          if (!typeNorm.includes("sick")) return false;
+        } else if (filterNorm === "permission") {
+          if (!typeNorm.includes("permission")) return false;
+        } else if (filterNorm === "emergency") {
+          if (!typeNorm.includes("emergency")) return false;
+        } else {
+          if (typeNorm !== filterNorm) return false;
+        }
+      }
+
+      // Date Filters
+      if (filterStartDate && l.end_date < filterStartDate) {
+        return false;
+      }
+      if (filterEndDate && l.start_date > filterEndDate) {
+        return false;
+      }
+
+      // Search Query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchReason = (l.clean_reason || l.reason || "").toLowerCase().includes(q);
+        const matchType = (l.leave_type || "").toLowerCase().includes(q);
+        const matchTime = (l.time_slot || "").toLowerCase().includes(q);
+        const matchStatus = (l.status || "").toLowerCase().includes(q);
+        const matchDates = `${l.start_date} ${l.end_date}`.includes(q);
+        if (!matchReason && !matchType && !matchTime && !matchStatus && !matchDates) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [leaves, selectedStatus, selectedLeaveType, filterStartDate, filterEndDate, searchQuery]);
+
+  const totalItems = filteredLeaves.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const validCurrentPage = Math.min(currentPage, totalPages);
+  const startIdx = (validCurrentPage - 1) * pageSize;
+  const paginatedLeaves = useMemo(() => {
+    return filteredLeaves.slice(startIdx, startIdx + pageSize);
+  }, [filteredLeaves, startIdx, pageSize]);
 
   const create = useMutation({
     mutationFn: () =>
@@ -389,10 +481,147 @@ function LeavePage() {
           </form>
         </Panel>
 
-        <Panel title="Leave History & Decisions" hint="Live real-time status of your requests.">
-          {leaves && leaves.length > 0 ? (
+        <Panel
+          title="Leave History & Decisions"
+          hint="Search, filter by date, type, and status, and view real-time decisions."
+        >
+          {/* SEARCH & FILTERS CONTROLS */}
+          <div className="mb-4 space-y-2.5 rounded-xl border border-border/70 bg-accent/20 p-3">
+            {/* Row 1: Search input + Status Badges */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search reason, timing, type, date..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full rounded-lg border border-input bg-background pl-8 pr-7 py-1.5 text-xs outline-none transition-colors focus:border-primary placeholder:text-muted-foreground/70"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setCurrentPage(1);
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* Status Filter Badges */}
+              <div className="flex items-center gap-1 rounded-lg border border-border/60 bg-background/80 p-1 text-xs">
+                {[
+                  { id: "all", label: "All", count: leaves?.length ?? 0 },
+                  { id: "Pending", label: "Pending", count: pending },
+                  { id: "Approved", label: "Approved", count: approved },
+                  { id: "Rejected", label: "Rejected", count: rejected },
+                ].map((st) => {
+                  const isActive = selectedStatus === st.id;
+                  return (
+                    <button
+                      key={st.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedStatus(st.id);
+                        setCurrentPage(1);
+                      }}
+                      className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition-all ${
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-sm font-semibold"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
+                      }`}
+                    >
+                      <span>{st.label}</span>
+                      <span
+                        className={`rounded-full px-1 text-[9px] ${
+                          isActive
+                            ? "bg-primary-foreground/20 text-primary-foreground font-bold"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {st.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Row 2: Leave Type Filter + Date From/To + Reset button */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/40 text-xs">
+              {/* Type Filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground">Type:</span>
+                <select
+                  value={selectedLeaveType}
+                  onChange={(e) => {
+                    setSelectedLeaveType(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="rounded-lg border border-input bg-background px-2 py-1 text-xs outline-none transition-colors focus:border-primary"
+                >
+                  <option value="all">All Types</option>
+                  {LEAVE_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Date From */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground">From:</span>
+                <input
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => {
+                    setFilterStartDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="rounded-lg border border-input bg-background px-2 py-1 text-xs outline-none transition-colors focus:border-primary"
+                />
+              </div>
+
+              {/* Date To */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground">To:</span>
+                <input
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => {
+                    setFilterEndDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="rounded-lg border border-input bg-background px-2 py-1 text-xs outline-none transition-colors focus:border-primary"
+                />
+              </div>
+
+              {/* Reset button */}
+              {isFiltered && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="ml-auto flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] font-semibold text-muted-foreground transition-all hover:bg-accent hover:text-foreground"
+                >
+                  <RotateCcw className="size-3" />
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* LEAVE CARDS OR EMPTY STATES */}
+          {filteredLeaves.length > 0 ? (
             <div className="space-y-3">
-              {leaves.map((l: LeaveRequest) => {
+              {paginatedLeaves.map((l: LeaveRequest) => {
                 const duration = days(l.start_date, l.end_date);
                 return (
                   <div
@@ -478,6 +707,71 @@ function LeavePage() {
                   </div>
                 );
               })}
+
+              {/* PAGINATION FOOTER */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-border/50 text-xs text-muted-foreground">
+                <div>
+                  Showing <span className="font-bold text-foreground">{startIdx + 1}</span>–
+                  <span className="font-bold text-foreground">
+                    {Math.min(startIdx + pageSize, totalItems)}
+                  </span>{" "}
+                  of <span className="font-bold text-foreground">{totalItems}</span> requests
+                  {isFiltered && <span className="text-[11px] text-primary ml-1">(filtered)</span>}
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={validCurrentPage <= 1}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      className="flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="size-3.5" />
+                      Prev
+                    </button>
+
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setCurrentPage(p)}
+                        className={`size-7 rounded-md text-xs font-semibold transition-all ${
+                          validCurrentPage === p
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "border border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      disabled={validCurrentPage >= totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      className="flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Next
+                      <ChevronRight className="size-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : isFiltered ? (
+            <div className="py-10 text-center text-sm text-muted-foreground space-y-2">
+              <Filter className="mx-auto size-7 text-muted-foreground/60" />
+              <p className="font-semibold text-foreground">No matching leave requests found</p>
+              <p className="text-xs">Try clearing or adjusting your search query, type, or date range.</p>
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/80 px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary transition-colors mt-1"
+              >
+                <RotateCcw className="size-3" />
+                Reset Filters
+              </button>
             </div>
           ) : (
             <div className="py-12 text-center text-sm text-muted-foreground">

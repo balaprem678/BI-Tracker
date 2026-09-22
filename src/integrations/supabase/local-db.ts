@@ -43,10 +43,13 @@ export type LocalProfile = {
   // Salary / HR
   salary: number | null;
   salary_type: string | null;
-  bank_account: string | null;
-  pan: string | null;
-  uan: string | null;
-  pf_number: string | null;
+  bank_name?: string | null;
+  bank_account?: string | null;
+  bank_ifsc?: string | null;
+  pan?: string | null;
+  uan?: string | null;
+  lop?: string | null;
+  pf_number?: string | null;
   experience: string | null;
   previous_company: string | null;
   // Emergency contact
@@ -241,9 +244,12 @@ export function generateSeedData(): LocalDatabaseSchema {
     work_location: null,
     salary: null,
     salary_type: "monthly",
+    bank_name: null,
     bank_account: null,
+    bank_ifsc: null,
     pan: null,
     uan: null,
+    lop: null,
     pf_number: null,
     experience: null,
     previous_company: null,
@@ -1132,7 +1138,7 @@ export function createLocalSupabaseClient() {
           city: null, state: null, pincode: null, photo_url: null,
           job_type: "full-time", joining_date: newUser.createdAt.slice(0, 10),
           work_location: null, salary: null, salary_type: "monthly",
-          bank_account: null, pan: null, uan: null, pf_number: null,
+          bank_name: null, bank_account: null, bank_ifsc: null, pan: null, uan: null, lop: null, pf_number: null,
           experience: null, previous_company: null,
           emergency_contact_name: null, emergency_contact_relation: null,
           emergency_contact_phone: null, emergency_contact_address: null,
@@ -1245,7 +1251,7 @@ export function createLocalSupabaseClient() {
             city: null, state: null, pincode: null, photo_url: null,
             job_type: "full-time", joining_date: newUser.createdAt.slice(0, 10),
             work_location: null, salary: null, salary_type: "monthly",
-            bank_account: null, pan: null, uan: null, pf_number: null,
+            bank_name: null, bank_account: null, bank_ifsc: null, pan: null, uan: null, lop: null, pf_number: null,
             experience: null, previous_company: null,
             emergency_contact_name: null, emergency_contact_relation: null,
             emergency_contact_phone: null, emergency_contact_address: null,

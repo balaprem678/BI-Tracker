@@ -204,9 +204,12 @@ function initForm(p: MyProfile | null | undefined) {
     workLocation: p?.work_location ?? "",
     salary: p?.salary != null ? String(p.salary) : "",
     salaryType: p?.salary_type ?? "",
+    bankName: p?.bank_name ?? "",
     bankAccount: p?.bank_account ?? "",
+    bankIfsc: p?.bank_ifsc ?? "",
     pan: p?.pan ?? "",
     uan: p?.uan ?? "",
+    lop: p?.lop ?? "",
     pfNumber: p?.pf_number ?? "",
     experience: p?.experience ?? "",
     previousCompany: p?.previous_company ?? "",
@@ -1012,10 +1015,22 @@ function AdminEmployeeProfile() {
                 ]}
               />
               <Field
+                label="Bank Name"
+                value={form.bankName}
+                onChange={set("bankName")}
+                placeholder="e.g. HDFC Bank, SBI, ICICI"
+              />
+              <Field
                 label="Bank Account Number"
                 value={showSalary ? form.bankAccount : form.bankAccount ? "●●●● ●●●● " + form.bankAccount.slice(-4) : ""}
                 onChange={set("bankAccount")}
                 placeholder="Account number"
+              />
+              <Field
+                label="Bank IFSC"
+                value={showSalary ? form.bankIfsc : form.bankIfsc ? form.bankIfsc.slice(0, 4) + "●●●●" + form.bankIfsc.slice(-3) : ""}
+                onChange={set("bankIfsc")}
+                placeholder="e.g. HDFC0001234"
               />
               <Field
                 label="PAN Number"
@@ -1030,10 +1045,10 @@ function AdminEmployeeProfile() {
                 placeholder="Universal Account Number"
               />
               <Field
-                label="PF Number"
-                value={showSalary ? form.pfNumber : form.pfNumber ? "●●●●●●●" + form.pfNumber.slice(-3) : ""}
-                onChange={set("pfNumber")}
-                placeholder="PF account number"
+                label="LOP (Loss of Pay)"
+                value={form.lop}
+                onChange={set("lop")}
+                placeholder="e.g. 0 or 2 days"
               />
               {/* <Field label="Experience" value={form.experience} onChange={set("experience")} placeholder="e.g. 3 years" /> */}
               {/* <Field label="Previous Company" value={form.previousCompany} onChange={set("previousCompany")} placeholder="e.g. Acme Corp" /> */}

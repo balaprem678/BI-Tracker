@@ -29,10 +29,13 @@ export type MyProfile = {
   // Salary / HR
   salary: number | null;
   salary_type: string | null;
+  bank_name: string | null;
   bank_account: string | null;
+  bank_ifsc: string | null;
   pan: string | null;
   uan: string | null;
-  pf_number: string | null;
+  lop: string | null;
+  pf_number?: string | null;
   experience: string | null;
   previous_company: string | null;
   // Emergency contact
@@ -70,9 +73,12 @@ function mapProfile(data: any, userMeta: any = {}): MyProfile {
     work_location: userMeta?.work_location ?? data?.work_location ?? null,
     salary: userMeta?.salary != null ? Number(userMeta.salary) : (data?.salary != null ? Number(data.salary) : null),
     salary_type: userMeta?.salary_type ?? data?.salary_type ?? null,
+    bank_name: userMeta?.bank_name ?? data?.bank_name ?? null,
     bank_account: userMeta?.bank_account ?? data?.bank_account ?? null,
+    bank_ifsc: userMeta?.bank_ifsc ?? data?.bank_ifsc ?? null,
     pan: userMeta?.pan ?? data?.pan ?? null,
     uan: userMeta?.uan ?? data?.uan ?? null,
+    lop: userMeta?.lop ?? data?.lop ?? null,
     pf_number: userMeta?.pf_number ?? data?.pf_number ?? null,
     experience: userMeta?.experience ?? data?.experience ?? null,
     previous_company: userMeta?.previous_company ?? data?.previous_company ?? null,
@@ -163,9 +169,12 @@ const updateInput = z.object({
   // Salary / HR (can only be set by admin; employee sends these too but we allow if they own)
   salary: z.number().nullable().optional(),
   salaryType: z.string().trim().max(30).optional().or(z.literal("")),
+  bankName: z.string().trim().max(100).optional().or(z.literal("")),
   bankAccount: z.string().trim().max(50).optional().or(z.literal("")),
+  bankIfsc: z.string().trim().max(30).optional().or(z.literal("")),
   pan: z.string().trim().max(20).optional().or(z.literal("")),
   uan: z.string().trim().max(30).optional().or(z.literal("")),
+  lop: z.string().trim().max(30).optional().or(z.literal("")),
   pfNumber: z.string().trim().max(30).optional().or(z.literal("")),
   experience: z.string().trim().max(255).optional().or(z.literal("")),
   previousCompany: z.string().trim().max(120).optional().or(z.literal("")),
@@ -233,9 +242,12 @@ export const updateMyProfile = createServerFn({ method: "POST" })
           work_location: data.workLocation || null,
           salary: data.salary ?? null,
           salary_type: data.salaryType || null,
+          bank_name: data.bankName || null,
           bank_account: data.bankAccount || null,
+          bank_ifsc: data.bankIfsc || null,
           pan: data.pan || null,
           uan: data.uan || null,
+          lop: data.lop || null,
           pf_number: data.pfNumber || null,
           experience: data.experience || null,
           previous_company: data.previousCompany || null,

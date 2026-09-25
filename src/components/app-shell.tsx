@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ChevronLeft,
   Clock,
+  DollarSign,
   FolderKanban,
   LayoutGrid,
   LogOut,
@@ -22,15 +23,17 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { type SessionInfo, checkMyAccountStatus } from "@/lib/tracker.functions";
+import { type SessionInfo, checkMyAccountStatus, getSessionInfo } from "@/lib/tracker.functions";
 import { getPendingLeaveNotifications } from "@/lib/leave.functions";
 import { AdminSearchBar } from "@/components/admin-search-bar";
 
 export function AppShell({
-  session,
+  session: propSession,
+  title,
   children,
 }: {
-  session: SessionInfo;
+  session?: SessionInfo;
+  title?: string;
   children: React.ReactNode;
 }) {
   const navigate = useNavigate();
@@ -42,8 +45,17 @@ export function AppShell({
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
+  const getSessionFn = useServerFn(getSessionInfo);
   const getPendingNotifsFn = useServerFn(getPendingLeaveNotifications);
   const checkStatusFn = useServerFn(checkMyAccountStatus);
+
+  const internalSessionQuery = useQuery({
+    queryKey: ["session"],
+    queryFn: () => getSessionFn({}),
+    enabled: !propSession,
+  });
+
+  const session = propSession || internalSessionQuery.data;
 
   const signOut = useCallback(async () => {
     await queryClient.cancelQueries();
@@ -99,7 +111,7 @@ export function AppShell({
 
   // Handle deactivated status from session or heartbeat response
   useEffect(() => {
-    if (session.isActive === false) {
+    if (session?.isActive === false) {
       forceDeactivatedSignOut();
       return;
     }
@@ -113,10 +125,10 @@ export function AppShell({
         forceDeactivatedSignOut();
       }
     }
-  }, [session.isActive, statusData, statusError, forceDeactivatedSignOut]);
+  }, [session?.isActive, statusData, statusError, forceDeactivatedSignOut]);
 
   // Real-time Pending Leave Notifications Query (for Admins)
-  const isAdmin = session.role === "admin";
+  const isAdmin = session?.role === "admin";
   const prevCountRef = useRef<number | null>(null);
 
   const { data: notifData } = useQuery({
@@ -178,15 +190,17 @@ export function AppShell({
     }, waitMs);
 
     return () => window.clearTimeout(timer);
-  }, [session.userId, signOut]);
+  }, [session?.userId, signOut]);
 
+  const role = session?.role;
   const nav =
-    session.role === "sub_admin"
+    role === "sub_admin"
       ? [{ to: "/project", label: "Project", icon: FolderKanban }]
-      : session.role === "admin"
+      : role === "admin"
         ? [
             { to: "/admin", label: "Admin Panel", icon: ShieldCheck },
             { to: "/admin/leave", label: "Leave Requests", icon: CalendarDays, badge: pendingCount > 0 ? pendingCount : undefined },
+            { to: "/admin/salary", label: "Salary / Payroll", icon: DollarSign },
             { to: "/team", label: "IT Team", icon: Users },
             { to: "/bi-staff", label: "BI Staff", icon: UserRound },
             { to: "/project", label: "Project", icon: FolderKanban },
@@ -200,12 +214,13 @@ export function AppShell({
           ];
 
   const tabs =
-    session.role === "sub_admin"
+    role === "sub_admin"
       ? [{ to: "/project", label: "Project", icon: FolderKanban }]
-      : session.role === "admin"
+      : role === "admin"
         ? [
             { to: "/admin", label: "Admin Panel", icon: ShieldCheck },
             { to: "/admin/leave", label: "Leaves", icon: CalendarDays, badge: pendingCount > 0 ? pendingCount : undefined },
+            { to: "/admin/salary", label: "Salary", icon: DollarSign },
             { to: "/team", label: "IT Team", icon: Users },
             { to: "/bi-staff", label: "BI Staff", icon: UserRound },
             { to: "/project", label: "Project", icon: FolderKanban },
@@ -217,7 +232,7 @@ export function AppShell({
           ];
 
   const initials =
-    (session.fullName || session.email || "U")
+    ((session?.fullName || session?.email || "U"))
       .split(" ")
       .filter(Boolean)
       .slice(0, 2)
@@ -470,7 +485,7 @@ export function AppShell({
               )}
 
               {/* USER PROFILE BUTTON / BADGE */}
-              {session.role === "employee" ? (
+              {session?.role === "employee" ? (
                 <Link
                   to="/profile"
                   title="My Profile"
@@ -478,16 +493,16 @@ export function AppShell({
                 >
                   <div className="hidden min-w-0 text-right sm:block">
                     <p className="truncate text-sm leading-tight">
-                      {session.fullName || session.email}
+                      {session?.fullName || session?.email}
                     </p>
                     <p className="text-xs uppercase tracking-widest text-primary">
-                      {session.role}
+                      {session?.role}
                     </p>
                   </div>
-                  {session.photoUrl ? (
+                  {session?.photoUrl ? (
                     <img
                       src={session.photoUrl}
-                      alt={session.fullName || session.email || "Profile"}
+                      alt={session?.fullName || session?.email || "Profile"}
                       className="size-8 shrink-0 rounded-full object-cover border border-primary/20 shadow-xs"
                     />
                   ) : (
@@ -497,7 +512,7 @@ export function AppShell({
                   )}
                   <UserRound className="size-4 shrink-0 text-muted-foreground sm:hidden" />
                 </Link>
-              ) : (
+              ) : session ? (
                 <div
                   title={`${session.fullName || session.email} (${session.role === "sub_admin" ? "Sub Admin" : "Admin"})`}
                   className="flex min-w-0 items-center gap-3 rounded-md border border-border bg-card/60 px-2.5 py-1.5"
@@ -522,6 +537,8 @@ export function AppShell({
                     </span>
                   )}
                 </div>
+              ) : (
+                <div className="size-8 shrink-0 rounded-full bg-muted animate-pulse" />
               )}
             </div>
           </div>

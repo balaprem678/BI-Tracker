@@ -269,6 +269,165 @@ export type Database = {
         }
         Relationships: []
       }
+      employee_salary_structures: {
+        Row: {
+          id: string
+          user_id: string
+          monthly_gross: number
+          basic_pay: number
+          hra: number
+          special_allowance: number
+          conveyance: number
+          pf_deduction: number
+          pt_deduction: number
+          tds_deduction: number
+          other_deductions: number
+          custom_notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          monthly_gross?: number
+          basic_pay?: number
+          hra?: number
+          special_allowance?: number
+          conveyance?: number
+          pf_deduction?: number
+          pt_deduction?: number
+          tds_deduction?: number
+          other_deductions?: number
+          custom_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          monthly_gross?: number
+          basic_pay?: number
+          hra?: number
+          special_allowance?: number
+          conveyance?: number
+          pf_deduction?: number
+          pt_deduction?: number
+          tds_deduction?: number
+          other_deductions?: number
+          custom_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      payslips: {
+        Row: {
+          id: string
+          user_id: string
+          month_year: string
+          payout_date: string
+          total_working_days: number
+          present_days: number
+          paid_days: number
+          lop_days: number
+          lop_deduction: number
+          basic_pay: number
+          hra: number
+          conveyance: number
+          special_allowance: number
+          bonus: number
+          gross_earnings: number
+          pf_deduction: number
+          pt_deduction: number
+          tds_deduction: number
+          other_deductions: number
+          total_deductions: number
+          net_salary: number
+          net_salary_words: string | null
+          bank_name: string | null
+          bank_account: string | null
+          bank_ifsc: string | null
+          pan: string | null
+          uan: string | null
+          pf_number: string | null
+          status: string
+          is_locked: boolean
+          generated_by: string | null
+          generated_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          month_year: string
+          payout_date: string
+          total_working_days?: number
+          present_days?: number
+          paid_days?: number
+          lop_days?: number
+          lop_deduction?: number
+          basic_pay?: number
+          hra?: number
+          conveyance?: number
+          special_allowance?: number
+          bonus?: number
+          gross_earnings?: number
+          pf_deduction?: number
+          pt_deduction?: number
+          tds_deduction?: number
+          other_deductions?: number
+          total_deductions?: number
+          net_salary?: number
+          net_salary_words?: string | null
+          bank_name?: string | null
+          bank_account?: string | null
+          bank_ifsc?: string | null
+          pan?: string | null
+          uan?: string | null
+          pf_number?: string | null
+          status?: string
+          is_locked?: boolean
+          generated_by?: string | null
+          generated_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          month_year?: string
+          payout_date?: string
+          total_working_days?: number
+          present_days?: number
+          paid_days?: number
+          lop_days?: number
+          lop_deduction?: number
+          basic_pay?: number
+          hra?: number
+          conveyance?: number
+          special_allowance?: number
+          bonus?: number
+          gross_earnings?: number
+          pf_deduction?: number
+          pt_deduction?: number
+          tds_deduction?: number
+          other_deductions?: number
+          total_deductions?: number
+          net_salary?: number
+          net_salary_words?: string | null
+          bank_name?: string | null
+          bank_account?: string | null
+          bank_ifsc?: string | null
+          pan?: string | null
+          uan?: string | null
+          pf_number?: string | null
+          status?: string
+          is_locked?: boolean
+          generated_by?: string | null
+          generated_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

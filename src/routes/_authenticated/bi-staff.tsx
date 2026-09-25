@@ -20,6 +20,9 @@ import {
   FolderKanban,
   LayoutGrid,
   Mail,
+  MapPin,
+  Maximize2,
+  Minimize2,
   RefreshCw,
   Search,
   Shield,
@@ -718,14 +721,16 @@ function EmployeeDetailsModal({
     queryFn: () => getEmployeeAllDataFn({ data: { employeeId } }),
   });
 
+  const [isFullscreen, setIsFullscreen] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "shifts" | "logs" | "leaves">("overview");
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-        <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-xl text-center">
-          <RefreshCw className="mx-auto size-6 animate-spin text-primary" />
-          <p className="mt-2 text-sm text-muted-foreground">Loading complete employee record…</p>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl text-center space-y-3">
+          <RefreshCw className="mx-auto size-8 animate-spin text-primary" />
+          <h3 className="text-base font-semibold text-foreground">Loading employee record…</h3>
+          <p className="text-xs text-muted-foreground">Fetching complete attendance, shifts, hourly logs and leaves.</p>
         </div>
       </div>
     );
@@ -733,7 +738,7 @@ function EmployeeDetailsModal({
 
   if (isError || !fullData) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl text-center space-y-4">
           <div className="mx-auto grid size-12 place-items-center rounded-full bg-destructive/10 text-destructive">
             <AlertCircle className="size-6" />
@@ -766,11 +771,31 @@ function EmployeeDetailsModal({
   const { profile, stats, projectBreakdown, shifts, hourlyLogs, leaves } = fullData;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="w-full max-w-4xl rounded-xl border border-border bg-card shadow-2xl overflow-hidden my-8">
+    <div
+      className={
+        isFullscreen
+          ? "fixed inset-0 z-50 flex flex-col bg-background w-screen h-screen overflow-hidden"
+          : "fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-6 overflow-hidden"
+      }
+    >
+      {!isFullscreen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+          onClick={onClose}
+          aria-hidden
+        />
+      )}
+
+      <div
+        className={
+          isFullscreen
+            ? "relative flex flex-col w-full h-full bg-background overflow-hidden"
+            : "relative flex flex-col w-full max-w-5xl max-h-[92vh] rounded-xl border border-border bg-card shadow-2xl overflow-hidden my-auto"
+        }
+      >
         {/* Modal Header */}
-        <div className="flex items-start justify-between border-b border-border bg-muted/40 p-5">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between border-b border-border bg-card/95 px-6 py-4 shrink-0 backdrop-blur-xs">
+          <div className="flex items-center gap-3.5">
             <div className="relative shrink-0">
               {profile.photoUrl ? (
                 <img
@@ -779,14 +804,14 @@ function EmployeeDetailsModal({
                   className="size-12 rounded-full object-cover border border-primary/20 shadow-xs"
                 />
               ) : (
-                <div className="grid size-12 place-items-center rounded-full bg-primary/10 text-base font-semibold text-primary">
+                <div className="grid size-12 place-items-center rounded-full bg-primary/10 text-base font-bold text-primary">
                   {getInitials(profile.fullName, profile.email)}
                 </div>
               )}
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-foreground">{profile.fullName}</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">{profile.fullName}</h2>
                 <span
                   className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
                     profile.role === "admin"
@@ -798,24 +823,40 @@ function EmployeeDetailsModal({
                 >
                   {profile.role}
                 </span>
+                {stats.isCurrentlyClockedIn && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                    <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Active Shift Now
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {profile.jobTitle || "Employee"} • {profile.department || "General Department"} • BI Staff
+                {profile.employeeId ? ` • ID: ${profile.employeeId}` : ""}
               </p>
             </div>
           </div>
+
           <div className="flex items-center gap-2">
             <Link
               to="/admin/employee/$id"
               params={{ id: employeeId }}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 border border-primary/20 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 border border-primary/20 px-3.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
             >
               <UserCog className="size-3.5" />
               Edit Account
             </Link>
             <button
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+              className="rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            </button>
+            <button
               onClick={onClose}
-              className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              title="Close"
+              className="rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <X className="size-5" />
             </button>
@@ -823,20 +864,20 @@ function EmployeeDetailsModal({
         </div>
 
         {/* Modal Tabs */}
-        <div className="flex border-b border-border bg-muted/20 px-5 pt-2 gap-2 text-xs font-medium">
+        <div className="flex border-b border-border bg-muted/20 px-6 pt-2 gap-2 text-xs font-medium shrink-0">
           <button
             onClick={() => setActiveTab("overview")}
-            className={`border-b-2 px-3 py-2 transition-colors ${
+            className={`border-b-2 px-3 py-2.5 transition-colors ${
               activeTab === "overview"
                 ? "border-primary font-semibold text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Overview & Stats
+            Overview &amp; Stats
           </button>
           <button
             onClick={() => setActiveTab("shifts")}
-            className={`border-b-2 px-3 py-2 transition-colors ${
+            className={`border-b-2 px-3 py-2.5 transition-colors ${
               activeTab === "shifts"
                 ? "border-primary font-semibold text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -846,7 +887,7 @@ function EmployeeDetailsModal({
           </button>
           <button
             onClick={() => setActiveTab("logs")}
-            className={`border-b-2 px-3 py-2 transition-colors ${
+            className={`border-b-2 px-3 py-2.5 transition-colors ${
               activeTab === "logs"
                 ? "border-primary font-semibold text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -856,7 +897,7 @@ function EmployeeDetailsModal({
           </button>
           <button
             onClick={() => setActiveTab("leaves")}
-            className={`border-b-2 px-3 py-2 transition-colors ${
+            className={`border-b-2 px-3 py-2.5 transition-colors ${
               activeTab === "leaves"
                 ? "border-primary font-semibold text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -867,155 +908,297 @@ function EmployeeDetailsModal({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 max-h-[65vh] overflow-y-auto">
-          {activeTab === "overview" && (
-            <div className="space-y-6">
-              {/* Stats overview */}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-lg border border-border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Clocked Hours</p>
-                  <p className="mt-1 text-lg font-bold font-mono">{stats.totalClockedHours.toFixed(1)}h</p>
-                </div>
-                <div className="rounded-lg border border-border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Total Shifts</p>
-                  <p className="mt-1 text-lg font-bold font-mono">{stats.totalShifts}</p>
-                </div>
-                <div className="rounded-lg border border-border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Logged Tasks</p>
-                  <p className="mt-1 text-lg font-bold font-mono">{stats.totalLoggedTasks}</p>
-                </div>
-                <div className="rounded-lg border border-border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">Leave Days</p>
-                  <p className="mt-1 text-lg font-bold font-mono">{stats.totalLeaveDays}</p>
-                </div>
-              </div>
-
-              {/* Project breakdown */}
-              <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Project Time Distribution
-                </h4>
-                {projectBreakdown.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic">No hourly project tasks logged yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {projectBreakdown.map((pb) => (
-                      <div key={pb.project} className="flex items-center justify-between rounded-lg border border-border p-3 text-xs">
-                        <div>
-                          <p className="font-semibold text-foreground">{pb.project}</p>
-                          <p className="text-muted-foreground">{pb.taskCount} tasks recorded</p>
-                        </div>
-                        <span className="font-mono font-bold text-primary">{pb.hours}h</span>
-                      </div>
-                    ))}
+        <div className="flex-1 overflow-y-auto p-6 md:p-8">
+          <div className="max-w-6xl mx-auto w-full space-y-6">
+            {activeTab === "overview" && (
+              <div className="space-y-6">
+                {/* 4 Stats Cards */}
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
+                    <div className="flex items-center justify-between text-muted-foreground mb-1">
+                      <span className="text-xs font-medium">Clocked Hours</span>
+                      <Clock className="size-4 text-primary" />
+                    </div>
+                    <p className="text-2xl font-bold font-mono text-foreground">{stats.totalClockedHours.toFixed(1)}h</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">Across all recorded shifts</p>
                   </div>
-                )}
-              </div>
-            </div>
-          )}
 
-          {activeTab === "shifts" && (
-            <div className="space-y-2">
-              {shifts.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic text-center py-8">No shift records found.</p>
-              ) : (
-                shifts.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between rounded-lg border border-border p-3 text-xs">
-                    <div>
-                      <p className="font-medium text-foreground">
-                        {new Date(s.clockIn).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
-                      </p>
-                      <p className="text-muted-foreground">
-                        {new Date(s.clockIn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        {" - "}
-                        {s.clockOut
-                          ? new Date(s.clockOut).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                          : "Active Now"}
-                      </p>
-                      <div className="mt-2 flex flex-col gap-1 text-[11px]">
-                        <div className="flex items-center gap-1.5 font-medium text-foreground">
-                          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                            Clock In Location
-                          </span>
-                          {s.clockInLocationName ? (
-                            <span>📍 {s.clockInLocationName}</span>
+                  <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
+                    <div className="flex items-center justify-between text-muted-foreground mb-1">
+                      <span className="text-xs font-medium">Total Shifts</span>
+                      <Timer className="size-4 text-primary" />
+                    </div>
+                    <p className="text-2xl font-bold font-mono text-foreground">{stats.totalShifts}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {stats.isCurrentlyClockedIn ? "1 shift in progress" : "All shifts completed"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
+                    <div className="flex items-center justify-between text-muted-foreground mb-1">
+                      <span className="text-xs font-medium">Logged Tasks</span>
+                      <FolderKanban className="size-4 text-primary" />
+                    </div>
+                    <p className="text-2xl font-bold font-mono text-foreground">{stats.totalLoggedTasks}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">Hourly reports registered</p>
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
+                    <div className="flex items-center justify-between text-muted-foreground mb-1">
+                      <span className="text-xs font-medium">Leave Days</span>
+                      <CalendarDays className="size-4 text-primary" />
+                    </div>
+                    <p className="text-2xl font-bold font-mono text-foreground">{stats.totalLeaveDays}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">Approved or pending days</p>
+                  </div>
+                </div>
+
+                {/* 2-Column Split: Project breakdown & Profile details */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Project breakdown */}
+                  <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center justify-between">
+                      <span>Project Time Distribution</span>
+                      <span className="font-mono text-[11px] text-foreground font-normal">
+                        {projectBreakdown.length} projects
+                      </span>
+                    </h4>
+                    {projectBreakdown.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic py-8 text-center">No hourly project tasks logged yet.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {projectBreakdown.map((pb) => (
+                          <div key={pb.project} className="rounded-lg border border-border bg-muted/20 p-3.5 text-xs">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="font-semibold text-foreground text-sm">{pb.project}</span>
+                              <span className="font-mono font-bold text-primary text-sm">{pb.hours}h</span>
+                            </div>
+                            <div className="flex items-center justify-between text-muted-foreground text-[11px]">
+                              <span>{pb.taskCount} task slots recorded</span>
+                              <span>{Math.round((pb.hours / (stats.totalLoggedTasks || 1)) * 100)}% of logged tasks</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Profile info card */}
+                  <div className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-4">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Staff Member Particulars
+                    </h4>
+                    <div className="space-y-3 text-xs">
+                      <div className="flex items-center justify-between py-2 border-b border-border/60">
+                        <span className="text-muted-foreground">Email Address</span>
+                        <span className="font-medium text-foreground">{profile.email || "No email"}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 border-b border-border/60">
+                        <span className="text-muted-foreground">Staff Section</span>
+                        <span className="font-medium text-foreground">{profile.staffSection || "BI Staff"}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 border-b border-border/60">
+                        <span className="text-muted-foreground">Account Status</span>
+                        <span className={`font-semibold ${profile.isActive ? "text-emerald-500" : "text-amber-500"}`}>
+                          {profile.isActive ? "Active Account" : "Inactive / Suspended"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 border-b border-border/60">
+                        <span className="text-muted-foreground">Current Live State</span>
+                        <span className={`font-semibold ${stats.isCurrentlyClockedIn ? "text-emerald-500" : "text-muted-foreground"}`}>
+                          {stats.isCurrentlyClockedIn ? "Clocked In Now" : "Clocked Out"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between py-2">
+                        <span className="text-muted-foreground">Member Since</span>
+                        <span className="font-medium text-foreground">
+                          {new Date(profile.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "shifts" && (
+              <div className="space-y-3">
+                {shifts.length === 0 ? (
+                  <div className="rounded-xl border border-border bg-card p-12 text-center">
+                    <Timer className="mx-auto size-10 text-muted-foreground/50 mb-3" />
+                    <p className="text-sm font-semibold text-foreground">No shift records found</p>
+                    <p className="text-xs text-muted-foreground mt-1">This staff member has not recorded any work shifts yet.</p>
+                  </div>
+                ) : (
+                  shifts.map((s) => (
+                    <div
+                      key={s.id}
+                      className="rounded-xl border border-border bg-card p-4 text-xs transition-colors hover:border-primary/40 shadow-xs"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2 pb-2 border-b border-border/50">
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-foreground text-sm">
+                            {new Date(s.clockIn).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                          </p>
+                          {s.clockOut ? (
+                            <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
+                              Completed Shift
+                            </span>
                           ) : (
-                            <span className="italic text-muted-foreground/70">Not recorded</span>
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              Active Now
+                            </span>
                           )}
                         </div>
-                        {s.clockOut && (
-                          <div className="flex items-center gap-1.5 font-medium text-foreground">
-                            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                              Clock Out Location
-                            </span>
-                            {s.clockOutLocationName ? (
-                              <span>📍 {s.clockOutLocationName}</span>
+
+                        <div className="flex items-center gap-3">
+                          <p className="text-muted-foreground font-mono">
+                            {new Date(s.clockIn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            {" - "}
+                            {s.clockOut
+                              ? new Date(s.clockOut).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                              : "Active Now"}
+                          </p>
+                          <span className="rounded-md bg-primary/10 border border-primary/20 px-2.5 py-1 font-mono font-bold text-primary text-xs">
+                            {s.hours.toFixed(2)}h
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] pt-1">
+                        <div className="flex items-start gap-2 bg-muted/20 rounded-lg p-2.5 border border-border/50">
+                          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 shrink-0">
+                            Clock In Location
+                          </span>
+                          <span className="text-foreground">
+                            {s.clockInLocationName ? (
+                              <span className="flex items-center gap-1">
+                                <MapPin className="size-3 text-emerald-500 shrink-0" />
+                                {s.clockInLocationName}
+                              </span>
                             ) : (
                               <span className="italic text-muted-foreground/70">Not recorded</span>
                             )}
-                          </div>
-                        )}
+                          </span>
+                        </div>
+
+                        <div className="flex items-start gap-2 bg-muted/20 rounded-lg p-2.5 border border-border/50">
+                          <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 shrink-0">
+                            Clock Out Location
+                          </span>
+                          <span className="text-foreground">
+                            {s.clockOutLocationName ? (
+                              <span className="flex items-center gap-1">
+                                <MapPin className="size-3 text-amber-500 shrink-0" />
+                                {s.clockOutLocationName}
+                              </span>
+                            ) : s.clockOut ? (
+                              <span className="italic text-muted-foreground/70">Not recorded</span>
+                            ) : (
+                              <span className="text-emerald-500 font-medium italic">Shift currently in progress</span>
+                            )}
+                          </span>
+                        </div>
                       </div>
-                      {s.note && <p className="mt-1 text-muted-foreground italic">"{s.note}"</p>}
-                    </div>
-                    <span className="font-mono font-semibold">{s.hours.toFixed(2)}h</span>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
 
-          {activeTab === "logs" && (
-            <div className="space-y-2">
-              {hourlyLogs.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic text-center py-8">No hourly task logs found.</p>
-              ) : (
-                hourlyLogs.map((l) => (
-                  <div key={l.id} className="rounded-lg border border-border p-3 text-xs space-y-1">
-                    <div className="flex items-center justify-between font-medium">
-                      <span className="text-foreground">{l.project || "General"}</span>
-                      <span className="text-muted-foreground font-mono">{l.logDate} • Slot {l.hourSlot}</span>
+                      {s.note && (
+                        <p className="mt-2.5 text-muted-foreground italic bg-muted/10 p-2 rounded border border-border/30 text-[11px]">
+                          Note: "{s.note}"
+                        </p>
+                      )}
                     </div>
-                    <p className="text-muted-foreground">{l.task}</p>
-                    <span className="inline-block rounded bg-secondary px-2 py-0.5 text-[10px] text-secondary-foreground font-mono">
-                      {l.category}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
+                  ))
+                )}
+              </div>
+            )}
 
-          {activeTab === "leaves" && (
-            <div className="space-y-2">
-              {leaves.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic text-center py-8">No leave requests found.</p>
-              ) : (
-                leaves.map((lv) => (
-                  <div key={lv.id} className="flex items-center justify-between rounded-lg border border-border p-3 text-xs">
-                    <div>
-                      <p className="font-medium text-foreground">{lv.leaveType} ({lv.daysCount} days)</p>
-                      <p className="text-muted-foreground">{lv.startDate} to {lv.endDate}</p>
-                      {lv.reason && <p className="mt-1 text-muted-foreground italic">"{lv.reason}"</p>}
-                    </div>
-                    <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium">
-                      {lv.status}
-                    </span>
+            {activeTab === "logs" && (
+              <div className="space-y-3">
+                {hourlyLogs.length === 0 ? (
+                  <div className="rounded-xl border border-border bg-card p-12 text-center">
+                    <FolderKanban className="mx-auto size-10 text-muted-foreground/50 mb-3" />
+                    <p className="text-sm font-semibold text-foreground">No hourly task logs found</p>
+                    <p className="text-xs text-muted-foreground mt-1">No hourly task updates have been submitted by this employee.</p>
                   </div>
-                ))
-              )}
-            </div>
-          )}
+                ) : (
+                  hourlyLogs.map((l) => (
+                    <div key={l.id} className="rounded-xl border border-border bg-card p-4 text-xs space-y-2 shadow-xs">
+                      <div className="flex items-center justify-between font-medium">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-foreground text-sm">{l.project || "General"}</span>
+                          <span className="rounded bg-secondary px-2 py-0.5 text-[10px] text-secondary-foreground font-mono">
+                            {l.category}
+                          </span>
+                        </div>
+                        <span className="text-muted-foreground font-mono text-[11px]">{l.logDate} • Slot {l.hourSlot}</span>
+                      </div>
+                      <p className="text-foreground/90 text-xs leading-relaxed">{l.task}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeTab === "leaves" && (
+              <div className="space-y-3">
+                {leaves.length === 0 ? (
+                  <div className="rounded-xl border border-border bg-card p-12 text-center">
+                    <CalendarDays className="mx-auto size-10 text-muted-foreground/50 mb-3" />
+                    <p className="text-sm font-semibold text-foreground">No leave requests found</p>
+                    <p className="text-xs text-muted-foreground mt-1">No leave applications found on file.</p>
+                  </div>
+                ) : (
+                  leaves.map((lv) => (
+                    <div key={lv.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-4 text-xs shadow-xs">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-foreground text-sm">{lv.leaveType}</p>
+                          <span className="rounded-md bg-primary/10 border border-primary/20 px-2 py-0.5 font-mono text-[10px] font-bold text-primary">
+                            {lv.daysCount} {lv.daysCount === 1 ? "day" : "days"}
+                          </span>
+                        </div>
+                        <p className="text-muted-foreground mt-0.5">{lv.startDate} to {lv.endDate}</p>
+                        {lv.reason && <p className="mt-1 text-muted-foreground italic">"{lv.reason}"</p>}
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                          lv.status?.toLowerCase() === "approved"
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : lv.status?.toLowerCase() === "rejected"
+                              ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                              : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                        }`}
+                      >
+                        {lv.status}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Modal Footer */}
-        <div className="border-t border-border bg-muted/40 p-4 text-right">
-          <button
-            onClick={onClose}
-            className="rounded-lg border border-border bg-background px-4 py-2 text-xs font-semibold text-foreground hover:bg-secondary"
-          >
-            Close
-          </button>
+        <div className="border-t border-border bg-muted/30 px-6 py-3.5 flex items-center justify-between shrink-0">
+          <span className="text-xs text-muted-foreground font-mono">
+            {profile.fullName} • Record ID: {employeeId.slice(0, 8)}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              {isFullscreen ? "Windowed View" : "Fullscreen"}
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-border bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>

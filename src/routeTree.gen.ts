@@ -24,6 +24,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedTeamRouteImport } from './routes/_authenticated/team'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminLeaveRouteImport } from './routes/_authenticated/admin.leave'
+import { Route as AuthenticatedAdminSalaryRouteImport } from './routes/_authenticated/admin.salary'
 import { Route as AuthenticatedAdminEmployeeIdRouteImport } from './routes/_authenticated/admin.employee.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -100,6 +101,12 @@ const AuthenticatedAdminLeaveRoute = AuthenticatedAdminLeaveRouteImport.update({
   path: '/leave',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAdminSalaryRoute =
+  AuthenticatedAdminSalaryRouteImport.update({
+    id: '/salary',
+    path: '/salary',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminEmployeeIdRoute =
   AuthenticatedAdminEmployeeIdRouteImport.update({
     id: '/employee/$id',
@@ -121,6 +128,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/team': typeof AuthenticatedTeamRoute
   '/admin/leave': typeof AuthenticatedAdminLeaveRoute
+  '/admin/salary': typeof AuthenticatedAdminSalaryRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/admin/employee/$id': typeof AuthenticatedAdminEmployeeIdRoute
 }
@@ -137,6 +145,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/team': typeof AuthenticatedTeamRoute
   '/admin/leave': typeof AuthenticatedAdminLeaveRoute
+  '/admin/salary': typeof AuthenticatedAdminSalaryRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/admin/employee/$id': typeof AuthenticatedAdminEmployeeIdRoute
 }
@@ -156,6 +165,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/team': typeof AuthenticatedTeamRoute
   '/_authenticated/admin/leave': typeof AuthenticatedAdminLeaveRoute
+  '/_authenticated/admin/salary': typeof AuthenticatedAdminSalaryRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/admin/employee/$id': typeof AuthenticatedAdminEmployeeIdRoute
 }
@@ -175,6 +185,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/team'
     | '/admin/leave'
+    | '/admin/salary'
     | '/admin/'
     | '/admin/employee/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -191,6 +202,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/team'
     | '/admin/leave'
+    | '/admin/salary'
     | '/admin'
     | '/admin/employee/$id'
   id:
@@ -209,6 +221,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/team'
     | '/_authenticated/admin/leave'
+    | '/_authenticated/admin/salary'
     | '/_authenticated/admin/'
     | '/_authenticated/admin/employee/$id'
   fileRoutesById: FileRoutesById
@@ -328,6 +341,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminLeaveRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/salary': {
+      id: '/_authenticated/admin/salary'
+      path: '/salary'
+      fullPath: '/admin/salary'
+      preLoaderRoute: typeof AuthenticatedAdminSalaryRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/employee/$id': {
       id: '/_authenticated/admin/employee/$id'
       path: '/employee/$id'
@@ -340,12 +360,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminLeaveRoute: typeof AuthenticatedAdminLeaveRoute
+  AuthenticatedAdminSalaryRoute: typeof AuthenticatedAdminSalaryRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedAdminEmployeeIdRoute: typeof AuthenticatedAdminEmployeeIdRoute
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminLeaveRoute: AuthenticatedAdminLeaveRoute,
+  AuthenticatedAdminSalaryRoute: AuthenticatedAdminSalaryRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
   AuthenticatedAdminEmployeeIdRoute: AuthenticatedAdminEmployeeIdRoute,
 }

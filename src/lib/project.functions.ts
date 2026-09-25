@@ -288,13 +288,28 @@ export const endDailyProjectSession = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const nowIso = new Date().toISOString();
 
+    const { data: currentSession } = await supabase
+      .from("project_sessions")
+      .select("project_id, duration_seconds, start_time")
+      .eq("id", data.sessionId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    let finalDuration = Math.floor(data.durationSeconds || 0);
+    if (!finalDuration && currentSession) {
+      const nowMs = Date.now();
+      const startMs = currentSession.start_time ? new Date(currentSession.start_time).getTime() : nowMs;
+      const elapsed = isNaN(startMs) ? 0 : Math.max(0, Math.floor((nowMs - startMs) / 1000));
+      finalDuration = (currentSession.duration_seconds || 0) + elapsed;
+    }
+
     const { error } = await supabase
       .from("project_sessions")
       .update({
         end_time: nowIso,
-        duration_seconds: Math.floor(data.durationSeconds),
+        duration_seconds: finalDuration,
         status: "Completed Today",
-        task_summary: data.taskSummary,
+        task_summary: data.taskSummary || "Completed today",
         daily_ended: true,
         updated_at: nowIso,
       })
@@ -302,6 +317,17 @@ export const endDailyProjectSession = createServerFn({ method: "POST" })
       .eq("user_id", userId);
 
     if (error) throw new Error(error.message);
+
+    if (currentSession?.project_id && data.status) {
+      await supabase
+        .from("projects")
+        .update({
+          status: data.status,
+          updated_at: nowIso,
+        })
+        .eq("id", currentSession.project_id);
+    }
+
     return { ok: true as const, message: "Daily project session completed." };
   });
 

@@ -19,11 +19,28 @@ import {
   Clock,
   MessageSquareQuote,
   ArrowRight,
+  Download,
+  Printer,
+  Building2,
+  CreditCard,
+  Lock,
+  FileText,
+  Sparkles,
+  Calculator,
+  ChevronRight,
+  Receipt,
+  Calendar,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionInfo, getMyShifts, type Shift } from "@/lib/tracker.functions";
 import { getMyProfile, updateMyProfile, type MyProfile } from "@/lib/profile.functions";
 import { getMyLeaves, type LeaveRequest } from "@/lib/leave.functions";
+import {
+  getMySalaryOverview,
+  getMyPayslips,
+  type Payslip,
+} from "@/lib/salary.functions";
+import { PayslipViewModal } from "@/components/payslip-view";
 import { LEAVE_TYPES } from "@/lib/constants";
 
 export const Route = createFileRoute("/_authenticated/profile")({
@@ -284,6 +301,52 @@ function ProfilePage() {
   const [form, setForm] = useState(initForm(null));
   const [showSalary, setShowSalary] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+
+  // Salary & Payslip states
+  const salaryOverviewFn = useServerFn(getMySalaryOverview);
+  const payslipsFn = useServerFn(getMyPayslips);
+
+  const [selectedSalaryMonth, setSelectedSalaryMonth] = useState<string>(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+  });
+
+  const [selectedPayslipModal, setSelectedPayslipModal] = useState<Payslip | null>(null);
+  const [isPayslipOpen, setIsPayslipOpen] = useState(false);
+
+  const salaryOverviewQuery = useQuery({
+    queryKey: ["my-salary-overview", selectedSalaryMonth],
+    queryFn: () => salaryOverviewFn({ data: { month_year: selectedSalaryMonth } }),
+    enabled: isEmployee,
+  });
+
+  const payslipsQuery = useQuery<Payslip[]>({
+    queryKey: ["my-payslips"],
+    queryFn: () => payslipsFn(),
+    enabled: isEmployee,
+  });
+
+  const monthOptions = useMemo(() => {
+    const options = [];
+    const curr = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(curr.getFullYear(), curr.getMonth() - i, 1);
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      options.push({ value, label });
+    }
+    return options;
+  }, []);
+
+  const formatINR = (val: number | undefined | null) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(val || 0);
+  };
 
   useEffect(() => {
     if (profile.data) {
@@ -787,102 +850,400 @@ function ProfilePage() {
         )}
 
         {activeTab === "salary" && (
-          <SectionCard>
-            <div className="mb-5 flex items-start justify-between gap-3">
+          <div className="space-y-6">
+            {/* Filter and Top Status Card */}
+            <SectionCard>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/80">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20">
+                    <DollarSign className="size-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-foreground">Monthly Salary & Compensation</h2>
+                    <p className="text-xs text-muted-foreground">
+                      Calculated monthly payout after LOP, PF, Professional Tax, and other deductions.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Month Filter and Reveal Controls */}
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <div className="flex items-center gap-1.5 bg-muted/50 border border-border/80 px-2.5 py-1.5 rounded-lg text-xs">
+                    <Calendar className="size-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground font-medium">Payroll Month:</span>
+                    <select
+                      value={selectedSalaryMonth}
+                      onChange={(e) => setSelectedSalaryMonth(e.target.value)}
+                      className="bg-transparent text-foreground font-semibold outline-none cursor-pointer"
+                    >
+                      {monthOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value} className="bg-popover text-popover-foreground">
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={() => setShowSalary((s) => !s)}
+                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+                  >
+                    {showSalary ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                    {showSalary ? "Hide Numbers" : "Reveal Numbers"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Monthly KPI Overview Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-5">
+                {/* Gross Pay */}
+                <div className="p-4 rounded-xl border border-border/60 bg-muted/20">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Monthly Gross Pay</span>
+                    <Building2 className="size-4 text-muted-foreground/70" />
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-foreground mt-2">
+                    {showSalary
+                      ? formatINR(salaryOverviewQuery.data?.calculated?.gross_earnings ?? salaryOverviewQuery.data?.structure?.monthly_gross ?? 0)
+                      : "●●●●●"}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    Basic + HRA + Allowances
+                  </div>
+                </div>
+
+                {/* Total Deductions with breakdown chips */}
+                <div className="p-4 rounded-xl border border-rose-500/20 bg-rose-500/5">
+                  <div className="flex items-center justify-between text-xs text-rose-600 dark:text-rose-400 font-medium">
+                    <span>Total Deductions</span>
+                    <Calculator className="size-4" />
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-rose-600 dark:text-rose-400 mt-2">
+                    {showSalary
+                      ? formatINR(salaryOverviewQuery.data?.calculated?.total_deductions ?? 0)
+                      : "●●●●●"}
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-1 text-[10px]">
+                    <span className="bg-rose-500/10 text-rose-700 dark:text-rose-300 px-1.5 py-0.5 rounded">
+                      LOP: {salaryOverviewQuery.data?.calculated?.lop_days ?? 0}d
+                    </span>
+                    <span className="bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                      PF: {showSalary ? formatINR(salaryOverviewQuery.data?.calculated?.pf_deduction ?? 0) : "••"}
+                    </span>
+                    <span className="bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                      PT: {showSalary ? formatINR(salaryOverviewQuery.data?.calculated?.pt_deduction ?? 0) : "••"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Net Take-Home Salary */}
+                <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 sm:col-span-2 lg:col-span-1">
+                  <div className="flex items-center justify-between text-xs text-primary font-semibold">
+                    <span>Net Salary Payable</span>
+                    <CheckCircle2 className="size-4" />
+                  </div>
+                  <div className="text-2xl font-black font-mono text-primary mt-2">
+                    {showSalary
+                      ? formatINR(salaryOverviewQuery.data?.calculated?.net_salary ?? 0)
+                      : "●●●●●"}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    Direct Credit to Bank
+                  </div>
+                </div>
+
+                {/* Attendance & Days Summary */}
+                <div className="p-4 rounded-xl border border-border/60 bg-muted/20">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Attendance & LOP</span>
+                    <Clock className="size-4 text-muted-foreground/70" />
+                  </div>
+                  <div className="flex items-baseline gap-1 mt-2">
+                    <span className="text-2xl font-bold text-foreground">
+                      {salaryOverviewQuery.data?.calculated?.paid_days ?? 0}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      / {salaryOverviewQuery.data?.calculated?.total_days ?? 30} Paid Days
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    {salaryOverviewQuery.data?.calculated?.lop_days ?? 0} LOP Loss of Pay Days
+                  </div>
+                </div>
+              </div>
+
+              {/* Comprehensive Breakdown Tables */}
+              <div className="mt-6 border border-border/80 rounded-xl overflow-hidden">
+                <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border/80">
+                  {/* Earnings column */}
+                  <div className="flex flex-col">
+                    <div className="bg-emerald-500/10 dark:bg-emerald-500/15 p-3.5 font-semibold text-xs text-emerald-700 dark:text-emerald-300 flex justify-between uppercase tracking-wider">
+                      <span>Monthly Earnings</span>
+                      <span>Amount</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs flex-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Basic Pay</span>
+                        <span className="font-mono font-medium">
+                          {showSalary
+                            ? formatINR(salaryOverviewQuery.data?.calculated?.basic_pay ?? salaryOverviewQuery.data?.structure?.basic_pay ?? 0)
+                            : "●●●●●"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">House Rent Allowance (HRA)</span>
+                        <span className="font-mono font-medium">
+                          {showSalary
+                            ? formatINR(salaryOverviewQuery.data?.calculated?.hra ?? salaryOverviewQuery.data?.structure?.hra ?? 0)
+                            : "●●●●●"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Special Allowance</span>
+                        <span className="font-mono font-medium">
+                          {showSalary
+                            ? formatINR(salaryOverviewQuery.data?.calculated?.special_allowance ?? salaryOverviewQuery.data?.structure?.special_allowance ?? 0)
+                            : "●●●●●"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Conveyance Allowance</span>
+                        <span className="font-mono font-medium">
+                          {showSalary
+                            ? formatINR(salaryOverviewQuery.data?.calculated?.conveyance ?? salaryOverviewQuery.data?.structure?.conveyance ?? 0)
+                            : "●●●●●"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-3.5 bg-muted/40 border-t border-border/60 flex justify-between font-semibold text-xs">
+                      <span>Gross Earnings</span>
+                      <span className="font-mono text-foreground">
+                        {showSalary
+                          ? formatINR(salaryOverviewQuery.data?.calculated?.gross_earnings ?? salaryOverviewQuery.data?.structure?.monthly_gross ?? 0)
+                          : "●●●●●"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Deductions column */}
+                  <div className="flex flex-col">
+                    <div className="bg-rose-500/10 dark:bg-rose-500/15 p-3.5 font-semibold text-xs text-rose-700 dark:text-rose-300 flex justify-between uppercase tracking-wider">
+                      <span>Monthly Deductions</span>
+                      <span>Amount</span>
+                    </div>
+                    <div className="p-4 space-y-3 text-xs flex-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground flex items-center gap-1.5">
+                          Loss of Pay (LOP)
+                          {(salaryOverviewQuery.data?.calculated?.lop_days ?? 0) > 0 && (
+                            <span className="text-[10px] bg-rose-500/15 text-rose-600 dark:text-rose-400 font-semibold px-1.5 py-0.5 rounded">
+                              {salaryOverviewQuery.data?.calculated?.lop_days} days unpaid
+                            </span>
+                          )}
+                        </span>
+                        <span className="font-mono font-medium text-rose-600 dark:text-rose-400">
+                          {showSalary
+                            ? `- ${formatINR(salaryOverviewQuery.data?.calculated?.lop_deduction ?? 0)}`
+                            : "●●●●●"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Provident Fund (Employee PF)</span>
+                        <span className="font-mono font-medium text-rose-600/90 dark:text-rose-400/90">
+                          {showSalary
+                            ? `- ${formatINR(salaryOverviewQuery.data?.calculated?.pf_deduction ?? salaryOverviewQuery.data?.structure?.pf_deduction ?? 0)}`
+                            : "●●●●●"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Professional Tax (PT)</span>
+                        <span className="font-mono font-medium text-rose-600/90 dark:text-rose-400/90">
+                          {showSalary
+                            ? `- ${formatINR(salaryOverviewQuery.data?.calculated?.pt_deduction ?? salaryOverviewQuery.data?.structure?.pt_deduction ?? 0)}`
+                            : "●●●●●"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Tax Deducted at Source (TDS)</span>
+                        <span className="font-mono font-medium text-rose-600/90 dark:text-rose-400/90">
+                          {showSalary
+                            ? `- ${formatINR(salaryOverviewQuery.data?.calculated?.tds_deduction ?? salaryOverviewQuery.data?.structure?.tds_deduction ?? 0)}`
+                            : "●●●●●"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-3.5 bg-muted/40 border-t border-border/60 flex justify-between font-semibold text-xs">
+                      <span>Total Deductions</span>
+                      <span className="font-mono text-rose-600 dark:text-rose-400">
+                        {showSalary
+                          ? `- ${formatINR(salaryOverviewQuery.data?.calculated?.total_deductions ?? 0)}`
+                          : "●●●●●"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
+
+            {/* Monthly Payslips & Download Statements */}
+            <SectionCard>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                <SectionTitle
+                  icon={<Receipt className="size-4" />}
+                  title="Monthly Payslips & Statements"
+                  hint="Official generated salary slips available to view and download as PDF."
+                />
+              </div>
+
+              {payslipsQuery.isLoading ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  Loading payslips records…
+                </div>
+              ) : (payslipsQuery.data || []).length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground space-y-2">
+                  <Receipt className="mx-auto size-7 text-muted-foreground/60" />
+                  <p className="font-semibold text-foreground">No generated payslips found yet.</p>
+                  <p>
+                    Official payslips are generated at the end of every month by the HR/Payroll team.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border/60 rounded-xl border border-border/80 overflow-hidden">
+                  {(payslipsQuery.data || []).map((slip) => {
+                    const [y, m] = slip.month_year.split("-");
+                    const dateObj = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+                    const formattedMonth = dateObj.toLocaleDateString("en-US", {
+                      month: "long",
+                      year: "numeric",
+                    });
+
+                    return (
+                      <div
+                        key={slip.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-background/50 hover:bg-muted/30 transition-colors gap-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs">
+                            {slip.month_year.slice(5)}/{slip.month_year.slice(2, 4)}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-foreground text-sm">
+                                {formattedMonth}
+                              </span>
+                              <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                {slip.status}
+                              </span>
+                              {slip.is_locked && (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                  <Lock className="size-2.5" />
+                                  Immutable
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Gross: {formatINR(slip.gross_earnings)} • Deductions: {formatINR(slip.total_deductions)} • Paid on {new Date(slip.payout_date).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 justify-between sm:justify-end">
+                          <div className="text-right font-mono">
+                            <span className="text-xs text-muted-foreground block text-[10px]">Net Paid</span>
+                            <span className="font-bold text-foreground text-sm text-primary">
+                              {showSalary ? formatINR(slip.net_salary) : "●●●●●"}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setSelectedPayslipModal({
+                                  ...slip,
+                                  employee_name: slip.employee_name || profile.data?.full_name || "Employee",
+                                  employee_code: slip.employee_code || profile.data?.employee_id || "EMP-000",
+                                  department: slip.department || profile.data?.department || "Business Intelligence",
+                                  job_title: slip.job_title || profile.data?.job_title || "Staff",
+                                });
+                                setIsPayslipOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors text-foreground"
+                            >
+                              <FileText className="size-3.5 text-primary" />
+                              <span>View Slip</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedPayslipModal({
+                                  ...slip,
+                                  employee_name: slip.employee_name || profile.data?.full_name || "Employee",
+                                  employee_code: slip.employee_code || profile.data?.employee_id || "EMP-000",
+                                  department: slip.department || profile.data?.department || "Business Intelligence",
+                                  job_title: slip.job_title || profile.data?.job_title || "Staff",
+                                });
+                                setIsPayslipOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold shadow-sm hover:bg-primary/90 transition-all"
+                            >
+                              <Download className="size-3.5" />
+                              <span>Download PDF</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </SectionCard>
+
+            {/* Banking & Compliance Details */}
+            <SectionCard>
               <SectionTitle
-                icon={<DollarSign className="size-4" />}
-                title="Salary / HR Information"
-                hint={
-                  isEmployee
-                    ? "Your payroll and banking details — read-only for employees."
-                    : "Payroll, banking, and compliance details."
-                }
+                icon={<CreditCard className="size-4" />}
+                title="Banking & Tax Details"
+                hint="Your registered bank account for salary disbursal and statutory IDs."
               />
-              <button
-                onClick={() => setShowSalary((s) => !s)}
-                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
-              >
-                {showSalary ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                {showSalary ? "Hide" : "Reveal"}
-              </button>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                label="Salary"
-                value={showSalary ? form.salary : form.salary ? "●●●●●" : ""}
-                onChange={set("salary")}
-                placeholder="e.g. 50000"
-                type={showSalary ? "number" : "text"}
-                readOnly={isEmployee}
-              />
-              <SelectField
-                label="Salary Type"
-                value={form.salaryType}
-                onChange={set("salaryType")}
-                readOnly={isEmployee}
-                options={[
-                  { value: "monthly", label: "Monthly" },
-                  { value: "weekly", label: "Weekly" },
-                  { value: "daily", label: "Daily" },
-                  { value: "hourly", label: "Hourly" },
-                ]}
-              />
-              <Field
-                label="Bank Name"
-                value={form.bankName}
-                onChange={set("bankName")}
-                placeholder="e.g. HDFC Bank, SBI, ICICI"
-                readOnly={isEmployee}
-              />
-              <Field
-                label="Bank Account Number"
-                value={showSalary ? form.bankAccount : form.bankAccount ? "●●●● ●●●● " + form.bankAccount.slice(-4) : ""}
-                onChange={set("bankAccount")}
-                placeholder="Account number"
-                readOnly={isEmployee}
-              />
-              <Field
-                label="Bank IFSC"
-                value={showSalary ? form.bankIfsc : form.bankIfsc ? form.bankIfsc.slice(0, 4) + "●●●●" + form.bankIfsc.slice(-3) : ""}
-                onChange={set("bankIfsc")}
-                placeholder="e.g. HDFC0001234"
-                readOnly={isEmployee}
-              />
-              <Field
-                label="PAN Number"
-                value={showSalary ? form.pan : form.pan ? form.pan.slice(0, 2) + "●●●●●●●" + form.pan.slice(-1) : ""}
-                onChange={set("pan")}
-                placeholder="ABCDE1234F"
-                readOnly={isEmployee}
-              />
-              <Field
-                label="UAN"
-                value={showSalary ? form.uan : form.uan ? "●●●●●●●" + form.uan.slice(-3) : ""}
-                onChange={set("uan")}
-                placeholder="Universal Account Number"
-                readOnly={isEmployee}
-              />
-              <Field
-                label="LOP (Loss of Pay)"
-                value={form.lop}
-                onChange={set("lop")}
-                placeholder="e.g. 0 or 2 days"
-                readOnly={isEmployee}
-              />
-              {/* <Field
-                label="Experience"
-                value={form.experience}
-                onChange={set("experience")}
-                placeholder="e.g. 3 years"
-              />
-              <Field
-                label="Previous Company"
-                value={form.previousCompany}
-                onChange={set("previousCompany")}
-                placeholder="e.g. Acme Corp"
-              /> */}
-            </div>
-          </SectionCard>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Bank Name"
+                  value={form.bankName}
+                  placeholder="e.g. HDFC Bank, SBI, ICICI"
+                  readOnly={true}
+                />
+                <Field
+                  label="Bank Account Number"
+                  value={showSalary ? form.bankAccount : form.bankAccount ? "●●●● ●●●● " + form.bankAccount.slice(-4) : ""}
+                  placeholder="Account number"
+                  readOnly={true}
+                />
+                <Field
+                  label="Bank IFSC Code"
+                  value={showSalary ? form.bankIfsc : form.bankIfsc ? form.bankIfsc.slice(0, 4) + "●●●●" + form.bankIfsc.slice(-3) : ""}
+                  placeholder="e.g. HDFC0001234"
+                  readOnly={true}
+                />
+                <Field
+                  label="PAN Number"
+                  value={showSalary ? form.pan : form.pan ? form.pan.slice(0, 2) + "●●●●●●●" + form.pan.slice(-1) : ""}
+                  placeholder="ABCDE1234F"
+                  readOnly={true}
+                />
+                <Field
+                  label="PF UAN Number"
+                  value={showSalary ? form.uan : form.uan ? "●●●●●●●" + form.uan.slice(-3) : ""}
+                  placeholder="Universal Account Number"
+                  readOnly={true}
+                />
+                <Field
+                  label="Provident Fund Account No."
+                  value={form.pfNumber || "MH/BAN/000000/000"}
+                  placeholder="PF Number"
+                  readOnly={true}
+                />
+              </div>
+            </SectionCard>
+          </div>
         )}
 
         {activeTab === "emergency" && (
@@ -942,6 +1303,12 @@ function ProfilePage() {
           </button> */}
         </div>
       </div>
+
+      <PayslipViewModal
+        payslip={selectedPayslipModal}
+        open={isPayslipOpen}
+        onOpenChange={setIsPayslipOpen}
+      />
     </AppShell>
   );
 }

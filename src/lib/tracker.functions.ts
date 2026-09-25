@@ -144,6 +144,9 @@ const clockOutInput = z.object({
   longitude: z.number({ required_error: "Location is required to Clock Out" }),
   locationName: z.string().optional().default(""),
   note: z.string().trim().max(500).optional(),
+  endProjectSessionId: z.string().optional(),
+  projectStatus: z.string().optional(),
+  taskSummary: z.string().trim().optional(),
 });
 
 export const clockOut = createServerFn({ method: "POST" })
@@ -187,7 +190,7 @@ export const clockOut = createServerFn({ method: "POST" })
 
     if (error) throw new Error(error.message);
 
-    // Automatically stop any running project sessions for this employee upon clock out
+    // Handle running project sessions for this employee upon clock out
     const nowIso = new Date().toISOString();
     const nowMs = Date.now();
 
@@ -196,8 +199,52 @@ export const clockOut = createServerFn({ method: "POST" })
       .select("*")
       .eq("user_id", userId);
 
+    let endedProjectName: string | null = null;
+
+    if (data.endProjectSessionId) {
+      const targetSession = (userSessions ?? []).find(
+        (s: any) => s.id === data.endProjectSessionId,
+      );
+      if (targetSession) {
+        const startMs = targetSession.start_time
+          ? new Date(targetSession.start_time).getTime()
+          : nowMs;
+        const elapsed = isNaN(startMs)
+          ? 0
+          : Math.max(0, Math.floor((nowMs - startMs) / 1000));
+        const updatedDuration = (targetSession.duration_seconds || 0) + elapsed;
+
+        await supabase
+          .from("project_sessions")
+          .update({
+            end_time: nowIso,
+            duration_seconds: updatedDuration,
+            status: "Completed Today",
+            task_summary: data.taskSummary || targetSession.task_summary || "Work completed on clock out.",
+            daily_ended: true,
+            updated_at: nowIso,
+          })
+          .eq("id", targetSession.id);
+
+        if (targetSession.project_id && data.projectStatus) {
+          await supabase
+            .from("projects")
+            .update({
+              status: data.projectStatus,
+              updated_at: nowIso,
+            })
+            .eq("id", targetSession.project_id);
+        }
+
+        endedProjectName = targetSession.project_name || "Project";
+      }
+    }
+
     const runningSessions = (userSessions ?? []).filter(
-      (s: any) => (!s.end_time || s.status === "In Progress") && !s.daily_ended,
+      (s: any) =>
+        (!s.end_time || s.status === "In Progress") &&
+        !s.daily_ended &&
+        s.id !== data.endProjectSessionId,
     );
 
     const stoppedProjectNames: string[] = [];
@@ -223,8 +270,9 @@ export const clockOut = createServerFn({ method: "POST" })
       }
     }
 
-    const message =
-      stoppedProjectNames.length > 0
+    const message = endedProjectName
+      ? `Work summary saved for ${endedProjectName} and Clocked Out successfully.`
+      : stoppedProjectNames.length > 0
         ? `Clocked Out successfully. Running project (${stoppedProjectNames.join(", ")}) was automatically stopped.`
         : "Clocked Out successfully.";
 

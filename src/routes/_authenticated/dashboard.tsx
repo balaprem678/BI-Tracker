@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
@@ -6,22 +6,16 @@ import { toast } from "sonner";
 import {
   Play,
   Pause,
-  CheckCircle2,
   Clock,
   Briefcase,
-  AlertCircle,
-  Calendar,
   Layers,
   Sparkles,
-  ChevronRight,
-  FolderCheck,
-  RotateCcw,
+  ArrowRight,
   MapPin,
   Navigation,
-  ExternalLink,
   ShieldAlert,
-  Coffee,
   X,
+  CalendarDays,
 } from "lucide-react";
 import { AppShell, Panel, Stat } from "@/components/app-shell";
 import { getCurrentLocation } from "@/lib/location";
@@ -34,28 +28,24 @@ import {
 } from "@/lib/tracker.functions";
 import {
   autoStopMidnightSessions,
-  endProjectForToday,
   getMyProjects,
   getMyProjectSessions,
-  pauseProjectSession,
-  Project,
   ProjectSession,
-  startProjectSession,
 } from "@/lib/project.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
     meta: [
-      { title: "Employee BI Tracker" },
+      { title: "Employee BI Tracker — Dashboard" },
       {
         name: "description",
         content:
-          "Automated multi-project time tracker with real-time timers, auto-pause, and daily status logging.",
+          "Automated shift and project tracking with real-time analytics and session summaries.",
       },
-      { property: "og:title", content: "Employee BI Tracker" },
+      { property: "og:title", content: "Employee BI Tracker — Dashboard" },
       {
         property: "og:description",
-        content: "Track real-time project sessions with automated timers.",
+        content: "Track real-time shifts and project session analytics.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -97,12 +87,8 @@ function Dashboard() {
   const shiftsFn = useServerFn(getMyShifts);
   const clockInFn = useServerFn(clockIn);
   const clockOutFn = useServerFn(clockOut);
-  // Project tracker server functions
   const myProjectsFn = useServerFn(getMyProjects);
   const mySessionsFn = useServerFn(getMyProjectSessions);
-  const startSessionFn = useServerFn(startProjectSession);
-  const pauseSessionFn = useServerFn(pauseProjectSession);
-  const endProjectFn = useServerFn(endProjectForToday);
   const autoStopMidnightFn = useServerFn(autoStopMidnightSessions);
   const shiftAnalyticsFn = useServerFn(getShiftAnalyticsToday);
 
@@ -111,12 +97,7 @@ function Dashboard() {
   const [currentTimestamp, setCurrentTimestamp] = useState(Date.now());
   const [locationErrorModal, setLocationErrorModal] = useState<string | null>(null);
   const [isAcquiringLocation, setIsAcquiringLocation] = useState(false);
-
-  // Ending project modal state
-  const [endingSession, setEndingSession] = useState<{
-    sessionId: string;
-    projectName: string;
-  } | null>(null);
+  const [endingSession, setEndingSession] = useState<ProjectSession | null>(null);
   const [finalStatus, setFinalStatus] = useState("Completed");
   const [taskSummary, setTaskSummary] = useState("");
 
@@ -150,26 +131,42 @@ function Dashboard() {
     refetchInterval: 10000,
   });
 
-  // Ticking timer effect (updates every 1000ms)
+  // 1-second live ticker
   useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      setCurrentTimestamp(now);
+    const interval = window.setInterval(() => {
+      setCurrentTimestamp(Date.now());
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
 
-      // Check midnight auto-stop
-      const d = new Date();
-      if (d.getHours() === 23 && d.getMinutes() === 59 && d.getSeconds() >= 55) {
-        autoStopMidnightFn({}).then(() => {
-          qc.invalidateQueries({ queryKey: ["my-project-sessions"] });
+  // Midnight check
+  useEffect(() => {
+    const checkMidnight = () => {
+      const now = new Date();
+      if (now.getHours() === 23 && now.getMinutes() === 59 && now.getSeconds() >= 55) {
+        autoStopMidnightFn({}).then((res) => {
+          if (res?.stoppedCount) {
+            toast.info("🌙 Day ended at midnight. Active sessions have been logged.");
+            qc.invalidateQueries({ queryKey: ["my-project-sessions"] });
+            qc.invalidateQueries({ queryKey: ["shift-analytics-today"] });
+          }
         });
       }
-    }, 1000);
-    return () => clearInterval(interval);
+    };
+    const timer = window.setInterval(checkMidnight, 5000);
+    return () => window.clearInterval(timer);
   }, [autoStopMidnightFn, qc]);
 
-  // Mandatory Geolocation Shift Mutations
   const clockMutation = useMutation({
-    mutationFn: async (payload: { kind: "in" | "out"; latitude: number; longitude: number; locationName: string }) => {
+    mutationFn: (payload: {
+      kind: "in" | "out";
+      latitude?: number;
+      longitude?: number;
+      locationName?: string;
+      endProjectSessionId?: string;
+      projectStatus?: string;
+      taskSummary?: string;
+    }) => {
       if (payload.kind === "in") {
         return clockInFn({
           data: {
@@ -184,6 +181,9 @@ function Dashboard() {
             latitude: payload.latitude,
             longitude: payload.longitude,
             locationName: payload.locationName,
+            endProjectSessionId: payload.endProjectSessionId,
+            projectStatus: payload.projectStatus,
+            taskSummary: payload.taskSummary,
           },
         });
       }
@@ -192,6 +192,9 @@ function Dashboard() {
       if (res.ok) {
         toast.success(res.message);
         setLocationErrorModal(null);
+        setEndingSession(null);
+        setTaskSummary("");
+        setFinalStatus("Completed");
       } else {
         toast.error(res.message);
       }
@@ -199,15 +202,22 @@ function Dashboard() {
       qc.invalidateQueries({ queryKey: ["shift-analytics-today"] });
       qc.invalidateQueries({ queryKey: ["my-project-sessions"] });
       qc.invalidateQueries({ queryKey: ["my-projects"] });
+      qc.invalidateQueries({ queryKey: ["admin-monitoring-overview"] });
     },
     onError: (err: any) => toast.error(err.message || "Could not update shift status."),
   });
 
-  const triggerShiftToggle = async (kind: "in" | "out") => {
+  const triggerShiftToggle = async (
+    kind: "in" | "out",
+    projectDetails?: {
+      endProjectSessionId?: string;
+      projectStatus?: string;
+      taskSummary?: string;
+    },
+  ) => {
     setIsAcquiringLocation(true);
     setLocationErrorModal(null);
     try {
-      // toast.info("Acquiring GPS location for shift verification...");
       toast.info("Verification...");
       const loc = await getCurrentLocation();
       setIsAcquiringLocation(false);
@@ -216,6 +226,9 @@ function Dashboard() {
         latitude: loc.latitude,
         longitude: loc.longitude,
         locationName: loc.locationName,
+        endProjectSessionId: projectDetails?.endProjectSessionId,
+        projectStatus: projectDetails?.projectStatus,
+        taskSummary: projectDetails?.taskSummary,
       });
     } catch (err: any) {
       setIsAcquiringLocation(false);
@@ -225,76 +238,17 @@ function Dashboard() {
     }
   };
 
-  const startMutation = useMutation({
-    mutationFn: (p: { projectId: string; projectName: string }) =>
-      startSessionFn({ data: { projectId: p.projectId, projectName: p.projectName, date: today } }),
-    onSuccess: (res) => {
-      if (res.ok) {
-        toast.success(res.message);
-      } else {
-        toast.error(res.message);
-      }
-      qc.invalidateQueries({ queryKey: ["my-project-sessions", selectedDate] });
-      qc.invalidateQueries({ queryKey: ["shift-analytics-today"] });
-    },
-    onError: (err: any) => toast.error(err.message || "Failed to start project session."),
-  });
-
-  const pauseMutation = useMutation({
-    mutationFn: (sessionId: string) => pauseSessionFn({ data: { sessionId } }),
-    onSuccess: (res) => {
-      toast.info(res.message);
-      qc.invalidateQueries({ queryKey: ["my-project-sessions", selectedDate] });
-      qc.invalidateQueries({ queryKey: ["shift-analytics-today"] });
-    },
-    onError: (err: any) => toast.error(err.message || "Failed to pause project session."),
-  });
-
-  const endProjectMutation = useMutation({
-    mutationFn: () => {
-      if (!endingSession) throw new Error("No session selected");
-      return endProjectFn({
-        data: {
-          sessionId: endingSession.sessionId,
-          status: finalStatus,
-          taskSummary,
-        },
-      });
-    },
-    onSuccess: (res) => {
-      toast.success(res.message);
-      setEndingSession(null);
-      setTaskSummary("");
-      setFinalStatus("Completed");
-      qc.invalidateQueries({ queryKey: ["my-project-sessions", selectedDate] });
-      qc.invalidateQueries({ queryKey: ["shift-analytics-today"] });
-    },
-    onError: (err: any) => toast.error(err.message || "Failed to end project for today."),
-  });
-
   // Calculate live project state
   const runningSession = useMemo(() => {
     return sessions.find((s) => !s.end_time && s.status === "In Progress" && !s.daily_ended);
   }, [sessions]);
 
-  // Compute live duration per project
-  const projectLiveState = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        session?: ProjectSession | undefined;
-        isRunning: boolean;
-        isDailyEnded: boolean;
-        currentSeconds: number;
-        status: string;
-      }
-    >();
-
+  // Compute live duration across projects
+  const totalSecondsToday = useMemo(() => {
+    let sum = 0;
     for (const p of projects) {
       const userSessions = sessions.filter((s) => s.project_id === p.id);
       const active = userSessions.find((s) => !s.end_time && s.status === "In Progress" && !s.daily_ended);
-      const isDailyEnded = userSessions.some((s) => s.daily_ended);
-
       let accumulated = userSessions.reduce((acc, s) => acc + (s.duration_seconds || 0), 0);
 
       if (active && isToday) {
@@ -302,27 +256,12 @@ function Dashboard() {
         const liveSecs = Math.max(0, Math.floor((currentTimestamp - startMs) / 1000));
         accumulated += liveSecs;
       }
-
-      map.set(p.id, {
-        session: active || userSessions[0],
-        isRunning: Boolean(active),
-        isDailyEnded,
-        currentSeconds: accumulated,
-        status: isDailyEnded ? "Completed Today" : active ? "In Progress" : p.status || "Not Started",
-      });
-    }
-    return map;
-  }, [projects, sessions, currentTimestamp, isToday]);
-
-  // Overall statistics
-  const totalSecondsToday = useMemo(() => {
-    let sum = 0;
-    for (const [, state] of projectLiveState.entries()) {
-      sum += state.currentSeconds;
+      sum += accumulated;
     }
     return sum;
-  }, [projectLiveState]);
+  }, [projects, sessions, currentTimestamp, isToday]);
 
+  const activeProjectsCount = runningSession ? 1 : 0;
   const completedProjectsCount = useMemo(() => {
     return sessions.filter((s) => s.daily_ended).length;
   }, [sessions]);
@@ -377,25 +316,24 @@ function Dashboard() {
                 <span className="font-mono text-foreground font-semibold">
                   Shift: {formatSeconds(liveShiftSeconds)}
                 </span>
-                {openShift.clock_in_location_name && (
-                  <a
-                    href={`https://maps.google.com/?q=${openShift.clock_in_lat ?? ""},${openShift.clock_in_lng ?? ""}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-primary hover:underline"
-                    title="View Clock-In GPS Location"
-                  >
-                    {/* <MapPin className="size-3" />
-                    {openShift.clock_in_location_name}
-                    <ExternalLink className="size-3" /> */}
-                  </a>
-                )}
               </div>
             )}
           </div>
 
           <button
-            onClick={() => triggerShiftToggle(openShift ? "out" : "in")}
+            onClick={() => {
+              if (openShift) {
+                if (runningSession) {
+                  setEndingSession(runningSession);
+                  setFinalStatus("Completed");
+                  setTaskSummary("");
+                  return;
+                }
+                triggerShiftToggle("out");
+              } else {
+                triggerShiftToggle("in");
+              }
+            }}
             disabled={isAcquiringLocation || clockMutation.isPending}
             className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 shadow-sm ${
               openShift
@@ -419,11 +357,11 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* KPI Stats Cards (Separate Shift Hours vs Project Hours) */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      {/* KPI Stats Cards — Showing Counts and Hours Only */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <Stat
           label="Shift Hours (Today)"
-          value={shiftAnalytics?.todayShiftHours ?? 0.00}
+          value={shiftAnalytics?.todayShiftHours ?? 0.0}
           suffix="h"
         />
         <Stat
@@ -433,13 +371,12 @@ function Dashboard() {
         />
         <Stat
           label="Meetings & General"
-          value={shiftAnalytics?.unallocatedHours ?? 0.00}
+          value={shiftAnalytics?.unallocatedHours ?? 0.0}
           suffix="h"
         />
         <Stat
-          label="Active Project"
-          value={runningSession ? runningSession.project_name : "Idle"}
-          suffix={runningSession ? " (Running)" : ""}
+          label="Active Projects"
+          value={activeProjectsCount}
         />
         <Stat
           label="Completed Projects"
@@ -447,195 +384,49 @@ function Dashboard() {
         />
       </div>
 
-      {/* Main Multi-Project Workspace */}
-      <div className="mt-8">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      {/* Quick Link to Project Section */}
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/80 bg-card p-5 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="grid size-10 place-items-center rounded-lg bg-primary/10 text-primary">
+            <Layers className="size-5" />
+          </div>
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
-              <Layers className="size-5 text-primary" />
-              Project Workstation
-            </h2>
+            <h2 className="text-base font-bold text-foreground">Project Management & Workstation</h2>
             <p className="text-xs text-muted-foreground">
-              Click Start on any project to begin tracking. Starting a new project automatically pauses any currently active project.
+              Track multi-project timers, start/pause tasks, and log deliverables in the Project section.
             </p>
           </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Date:</span>
-            <input
-              type="date"
-              value={selectedDate}
-              max={today}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="rounded-lg border border-input bg-card px-3 py-1.5 text-xs font-medium text-foreground outline-none focus:border-primary"
-            />
-          </div>
         </div>
-
-        {/* Project Cards Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {projects.map((proj) => {
-            const state = projectLiveState.get(proj.id) || {
-              isRunning: false,
-              isDailyEnded: false,
-              currentSeconds: 0,
-              status: "Not Started",
-            };
-
-            return (
-              <div
-                key={proj.id}
-                className={`relative flex flex-col justify-between rounded-xl border p-5 transition-all shadow-sm ${
-                  state.isRunning
-                    ? "border-primary/50 bg-primary/5 ring-1 ring-primary/40 shadow-md"
-                    : state.isDailyEnded
-                    ? "border-border/40 bg-card/60 opacity-80"
-                    : "border-border/60 bg-card hover:border-border hover:shadow"
-                }`}
-              >
-                {/* Status Badge & Code */}
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="rounded bg-secondary/80 px-2 py-0.5 text-[11px] font-mono font-medium text-secondary-foreground">
-                      {proj.code || "PROJ"}
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        state.isRunning
-                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 animate-pulse"
-                          : state.isDailyEnded
-                          ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
-                          : state.status === "Paused"
-                          ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      <span
-                        className={`size-1.5 rounded-full ${
-                          state.isRunning
-                            ? "bg-emerald-500"
-                            : state.isDailyEnded
-                            ? "bg-blue-500"
-                            : state.status === "Paused"
-                            ? "bg-amber-500"
-                            : "bg-muted-foreground"
-                        }`}
-                      />
-                      {state.isRunning
-                        ? "In Progress"
-                        : state.isDailyEnded
-                        ? `Finished (${state.status})`
-                        : state.status}
-                    </span>
-                  </div>
-
-                  <h3 className="mt-3 text-base font-bold text-foreground line-clamp-1">
-                    {proj.name}
-                  </h3>
-                  <p className="mt-1 text-xs text-muted-foreground line-clamp-2 min-h-[2rem]">
-                    {proj.description || "Active business intelligence track."}
-                  </p>
-                </div>
-
-                {/* Timer Display */}
-                <div className="my-4 rounded-lg border border-border/40 bg-background/80 p-3.5 text-center">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Today's Recorded Time
-                  </span>
-                  <div className="mt-0.5 text-2xl font-mono font-bold tracking-tight text-foreground">
-                    {formatSeconds(state.currentSeconds)}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    ({formatHoursDecimal(state.currentSeconds)} hours)
-                  </div>
-                </div>
-
-                {/* Action Controls */}
-                <div className="pt-2">
-                  {state.isDailyEnded ? (
-                    <div className="flex items-center justify-center gap-1.5 rounded-lg border border-border/40 bg-muted/40 py-2.5 text-xs font-semibold text-muted-foreground">
-                      <FolderCheck className="size-4 text-emerald-500" />
-                      Completed for Today
-                    </div>
-                  ) : !isToday ? (
-                    <div className="py-2 text-center text-xs text-muted-foreground">
-                      Read-only history mode
-                    </div>
-                  ) : state.isRunning ? (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => state.session && pauseMutation.mutate(state.session.id)}
-                        disabled={pauseMutation.isPending}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 py-2.5 text-xs font-bold text-amber-600 hover:bg-amber-500/20 active:scale-[0.98] transition-all"
-                      >
-                        <Pause className="size-3.5" />
-                        Pause
-                      </button>
-                      <button
-                        onClick={() =>
-                          state.session &&
-                          setEndingSession({
-                            sessionId: state.session.id,
-                            projectName: proj.name,
-                          })
-                        }
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 py-2.5 text-xs font-bold text-primary hover:bg-primary/20 active:scale-[0.98] transition-all"
-                      >
-                        <CheckCircle2 className="size-3.5" />
-                        End for Today
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          if (!openShift) {
-                            toast.error("You must Clock In your shift before starting project work.");
-                            return;
-                          }
-                          startMutation.mutate({
-                            projectId: proj.id,
-                            projectName: proj.name,
-                          });
-                        }}
-                        disabled={startMutation.isPending}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg glow-primary bg-primary py-2.5 text-xs font-bold text-primary-foreground hover:brightness-110 active:scale-[0.98] transition-all shadow-sm"
-                      >
-                        <Play className="size-3.5" />
-                        {state.status === "Paused" ? "Resume Project" : "Start Project"}
-                      </button>
-                      {state.session && (
-                        <button
-                          onClick={() =>
-                            setEndingSession({
-                              sessionId: state.session!.id,
-                              projectName: proj.name,
-                            })
-                          }
-                          className="flex items-center justify-center rounded-lg border border-border bg-card px-3 py-2.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-all"
-                          title="End for today"
-                        >
-                          <CheckCircle2 className="size-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <Link
+          to="/project"
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90"
+        >
+          Go to Project Workstation
+          <ArrowRight className="size-3.5" />
+        </Link>
       </div>
 
       {/* Daily Sessions Breakdown Table */}
-      <div className="mt-10">
+      <div className="mt-8">
         <Panel
           title="Daily Project Sessions Breakdown"
           hint={`Detailed logs for ${selectedDate}. Recorded automatically from real-time timers.`}
+          action={
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Date:</span>
+              <input
+                type="date"
+                value={selectedDate}
+                max={today}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="rounded-lg border border-input bg-card px-3 py-1.5 text-xs font-medium text-foreground outline-none focus:border-primary"
+              />
+            </div>
+          }
         >
           {sessions.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              No project sessions recorded for {selectedDate}. Click "Start Project" above to start logging work.
+              No project sessions recorded for {selectedDate}.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -717,7 +508,7 @@ function Dashboard() {
         </Panel>
       </div>
 
-      {/* End Project for Today Modal Dialog */}
+      {/* Modal: End Work for Today on Clock Out */}
       {endingSession && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl space-y-4">
@@ -727,37 +518,50 @@ function Dashboard() {
                   End Work for Today
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Project: <span className="font-semibold text-foreground">{endingSession.projectName}</span>
+                  Project:{" "}
+                  <span className="font-semibold text-foreground">
+                    {endingSession.project_name ||
+                      projects.find((p) => p.id === endingSession.project_id)?.name ||
+                      "Current Project"}
+                  </span>
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setEndingSession(null)}
                 className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
               >
-                ✕
+                <X className="size-4" />
               </button>
             </div>
 
             <div className="space-y-3">
               <label className="block">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Final Project Status
+                  FINAL PROJECT STATUS
                 </span>
                 <select
                   value={finalStatus}
                   onChange={(e) => setFinalStatus(e.target.value)}
                   className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm font-medium outline-none focus:border-primary"
                 >
-                  <option value="Completed">Completed (Deliverables finished)</option>
-                  <option value="In Progress">In Progress (To continue next day)</option>
-                  <option value="On Hold">On Hold (Awaiting review / requirements)</option>
+                  <option value="Completed">
+                    Completed (Deliverables finished)
+                  </option>
+                  <option value="In Progress">
+                    In Progress (To continue next day)
+                  </option>
+                  <option value="On Hold">
+                    On Hold (Awaiting review / requirements)
+                  </option>
                   <option value="Blocked">Blocked (Dependencies pending)</option>
                 </select>
               </label>
 
               <label className="block">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Work Summary & Deliverables <span className="text-destructive">*</span>
+                  WORK SUMMARY & DELIVERABLES{" "}
+                  <span className="text-destructive">*</span>
                 </span>
                 <textarea
                   rows={4}
@@ -779,20 +583,32 @@ function Dashboard() {
               </button>
               <button
                 type="button"
-                disabled={endProjectMutation.isPending || !taskSummary.trim()}
-                onClick={() => endProjectMutation.mutate()}
-                className="rounded-lg glow-primary bg-primary px-5 py-2 text-xs font-bold text-primary-foreground hover:brightness-110 disabled:opacity-50"
+                onClick={() => {
+                  if (!taskSummary.trim()) {
+                    toast.error("Please enter your work summary & deliverables before ending work.");
+                    return;
+                  }
+                  triggerShiftToggle("out", {
+                    endProjectSessionId: endingSession.id,
+                    projectStatus: finalStatus,
+                    taskSummary: taskSummary.trim(),
+                  });
+                }}
+                disabled={isAcquiringLocation || clockMutation.isPending || !taskSummary.trim()}
+                className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:brightness-110 disabled:opacity-50"
               >
-                {endProjectMutation.isPending ? "Saving…" : "Save & End for Today"}
+                {isAcquiringLocation
+                  ? "Verifying location..."
+                  : clockMutation.isPending
+                  ? "Saving & Clocking Out..."
+                  : "Save & End Work"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ========================================================
-          MODAL: LOCATION PERMISSION REQUIRED WARNING
-         ======================================================== */}
+      {/* Modal: Location Permission Required Warning */}
       {locationErrorModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl border border-destructive/30 bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">

@@ -139,6 +139,59 @@ export type LocalProjectSession = {
   updated_at: string;
 };
 
+export type LocalSalaryStructure = {
+  id: string;
+  user_id: string;
+  monthly_gross: number;
+  basic_pay: number;
+  hra: number;
+  special_allowance: number;
+  conveyance: number;
+  pf_deduction: number;
+  pt_deduction: number;
+  tds_deduction: number;
+  other_deductions: number;
+  custom_notes?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LocalPayslip = {
+  id: string;
+  user_id: string;
+  month_year: string;
+  payout_date: string;
+  total_working_days: number;
+  present_days: number;
+  paid_days: number;
+  lop_days: number;
+  lop_deduction: number;
+  basic_pay: number;
+  hra: number;
+  conveyance: number;
+  special_allowance: number;
+  bonus: number;
+  gross_earnings: number;
+  pf_deduction: number;
+  pt_deduction: number;
+  tds_deduction: number;
+  other_deductions: number;
+  total_deductions: number;
+  net_salary: number;
+  net_salary_words: string | null;
+  bank_name: string | null;
+  bank_account: string | null;
+  bank_ifsc: string | null;
+  pan: string | null;
+  uan: string | null;
+  pf_number: string | null;
+  status: string;
+  is_locked: boolean;
+  generated_by: string | null;
+  generated_at: string;
+  created_at: string;
+};
+
 export interface LocalDatabaseSchema {
   users: LocalUser[];
   profiles: LocalProfile[];
@@ -149,6 +202,8 @@ export interface LocalDatabaseSchema {
   projects: LocalProject[];
   project_assignments: LocalProjectAssignment[];
   project_sessions: LocalProjectSession[];
+  employee_salary_structures: LocalSalaryStructure[];
+  payslips: LocalPayslip[];
 }
 
 const LOCAL_STORAGE_KEY = "bi_tracker_local_db_v1";
@@ -537,6 +592,114 @@ export function generateSeedData(): LocalDatabaseSchema {
     },
   ];
 
+  const employee_salary_structures: LocalSalaryStructure[] = [
+    {
+      id: "sal-struct-emp",
+      user_id: SEED_EMPLOYEE_ID,
+      monthly_gross: 50000,
+      basic_pay: 25000,
+      hra: 12500,
+      conveyance: 2500,
+      special_allowance: 10000,
+      pf_deduction: 1800,
+      pt_deduction: 200,
+      tds_deduction: 1500,
+      other_deductions: 0,
+      custom_notes: "Standard BI Senior Analyst Package",
+      created_at: sampleDateIso(-60, 9, 0),
+      updated_at: sampleDateIso(-60, 9, 0),
+    },
+    {
+      id: "sal-struct-sub",
+      user_id: SEED_SUBADMIN_ID,
+      monthly_gross: 65000,
+      basic_pay: 32500,
+      hra: 16250,
+      conveyance: 3250,
+      special_allowance: 13000,
+      pf_deduction: 1800,
+      pt_deduction: 200,
+      tds_deduction: 2500,
+      other_deductions: 0,
+      custom_notes: "Operations Lead Package",
+      created_at: sampleDateIso(-60, 9, 0),
+      updated_at: sampleDateIso(-60, 9, 0),
+    },
+  ];
+
+  const payslips: LocalPayslip[] = [
+    {
+      id: "ps-2026-07-emp",
+      user_id: SEED_EMPLOYEE_ID,
+      month_year: "2026-07",
+      payout_date: "2026-07-31",
+      total_working_days: 31,
+      present_days: 31,
+      paid_days: 31,
+      lop_days: 0,
+      lop_deduction: 0,
+      basic_pay: 25000,
+      hra: 12500,
+      conveyance: 2500,
+      special_allowance: 10000,
+      bonus: 0,
+      gross_earnings: 50000,
+      pf_deduction: 1800,
+      pt_deduction: 200,
+      tds_deduction: 1500,
+      other_deductions: 0,
+      total_deductions: 3500,
+      net_salary: 46500,
+      net_salary_words: "Rupees Forty-Six Thousand Five Hundred Only",
+      bank_name: "HDFC Bank",
+      bank_account: "50100234567890",
+      bank_ifsc: "HDFC0001234",
+      pan: "ABCDE1234F",
+      uan: "100908070605",
+      pf_number: "MH/BAN/0012345/000/0001234",
+      status: "Paid",
+      is_locked: true,
+      generated_by: SEED_ADMIN_ID,
+      generated_at: "2026-07-31T18:00:00.000Z",
+      created_at: "2026-07-31T18:00:00.000Z",
+    },
+    {
+      id: "ps-2026-08-emp",
+      user_id: SEED_EMPLOYEE_ID,
+      month_year: "2026-08",
+      payout_date: "2026-08-31",
+      total_working_days: 31,
+      present_days: 29.5,
+      paid_days: 29.5,
+      lop_days: 1.5,
+      lop_deduction: 2419.35,
+      basic_pay: 25000,
+      hra: 12500,
+      conveyance: 2500,
+      special_allowance: 10000,
+      bonus: 2000,
+      gross_earnings: 52000,
+      pf_deduction: 1800,
+      pt_deduction: 200,
+      tds_deduction: 1500,
+      other_deductions: 0,
+      total_deductions: 5919.35,
+      net_salary: 46080.65,
+      net_salary_words: "Rupees Forty-Six Thousand Eighty and Sixty-Five Paise Only",
+      bank_name: "HDFC Bank",
+      bank_account: "50100234567890",
+      bank_ifsc: "HDFC0001234",
+      pan: "ABCDE1234F",
+      uan: "100908070605",
+      pf_number: "MH/BAN/0012345/000/0001234",
+      status: "Generated",
+      is_locked: true,
+      generated_by: SEED_ADMIN_ID,
+      generated_at: "2026-08-31T18:00:00.000Z",
+      created_at: "2026-08-31T18:00:00.000Z",
+    },
+  ];
+
   return {
     users,
     profiles,
@@ -547,6 +710,8 @@ export function generateSeedData(): LocalDatabaseSchema {
     projects,
     project_assignments,
     project_sessions,
+    employee_salary_structures,
+    payslips,
   };
 }
 

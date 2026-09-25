@@ -298,7 +298,7 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
         .order("hour_slot", { ascending: false }),
       context.supabase
         .from("leave_requests")
-        .select("id, start_date, end_date, leave_type, reason, status, reviewer_note, time_slot, created_at")
+        .select("id, start_date, end_date, leave_type, reason, status, reviewer_note, created_at")
         .eq("user_id", employeeId)
         .order("start_date", { ascending: false }),
     ]);

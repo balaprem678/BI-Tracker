@@ -13,6 +13,7 @@ export type SessionInfo = {
   hourlyRate: number;
   role: Role;
   isActive: boolean;
+  canManageProjects?: boolean;
   photoUrl?: string | null;
 };
 
@@ -30,16 +31,23 @@ export const getSessionInfo = createServerFn({ method: "GET" })
     ]);
 
     let photoUrl: string | null = null;
+    let metaCanManageProjects = false;
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
       photoUrl = authUser?.user?.user_metadata?.photo_url ?? null;
+      metaCanManageProjects = Boolean(authUser?.user?.user_metadata?.can_manage_projects);
     } catch {
       // Ignore user metadata fetch error
     }
 
     const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
     const isSubAdmin = (roles ?? []).some((r: any) => r.role === "sub_admin");
+    const canManageProjects =
+      isAdmin ||
+      isSubAdmin ||
+      metaCanManageProjects ||
+      Boolean((profile as any)?.can_manage_projects);
     return {
       userId,
       email: profile?.email ?? null,
@@ -49,24 +57,40 @@ export const getSessionInfo = createServerFn({ method: "GET" })
       hourlyRate: Number(profile?.hourly_rate ?? 0),
       role: isAdmin ? "admin" : isSubAdmin ? "sub_admin" : "employee",
       isActive: profile?.is_active ?? true,
+      canManageProjects,
       photoUrl,
     };
   });
 
 export const checkMyAccountStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<{ isActive: boolean; userId: string; role: Role }> => {
+  .handler(async ({ context }): Promise<{ isActive: boolean; userId: string; role: Role; canManageProjects: boolean }> => {
     const { supabase, userId } = context;
     const [{ data: profile }, { data: roles }] = await Promise.all([
       supabase.from("profiles").select("is_active").eq("id", userId).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", userId),
     ]);
+
+    let metaCanManageProjects = false;
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+      metaCanManageProjects = Boolean(authUser?.user?.user_metadata?.can_manage_projects);
+    } catch {
+      // Ignore user metadata fetch error
+    }
+
     const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
     const isSubAdmin = (roles ?? []).some((r: any) => r.role === "sub_admin");
     return {
       userId,
       isActive: profile?.is_active ?? true,
       role: isAdmin ? "admin" : isSubAdmin ? "sub_admin" : "employee",
+      canManageProjects:
+        isAdmin ||
+        isSubAdmin ||
+        metaCanManageProjects ||
+        Boolean((profile as any)?.can_manage_projects),
     };
   });
 

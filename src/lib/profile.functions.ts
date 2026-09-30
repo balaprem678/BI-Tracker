@@ -12,6 +12,7 @@ export type MyProfile = {
   staff_section: string | null;
   hourly_rate: number;
   is_active: boolean;
+  can_manage_projects?: boolean;
   created_at: string;
   // Basic info
   gender: string | null;
@@ -59,6 +60,7 @@ function mapProfile(data: any, userMeta: any = {}): MyProfile {
     staff_section: data?.staff_section ?? userMeta?.staff_section ?? "IT Team",
     hourly_rate: Number(data?.hourly_rate ?? userMeta?.hourly_rate ?? 0),
     is_active: data?.is_active ?? true,
+    can_manage_projects: Boolean(userMeta?.can_manage_projects ?? data?.can_manage_projects),
     created_at: data?.created_at ?? "",
     gender: userMeta?.gender ?? data?.gender ?? null,
     date_of_birth: userMeta?.date_of_birth ?? data?.date_of_birth ?? null,

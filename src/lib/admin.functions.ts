@@ -3,12 +3,29 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 async function assertAdmin(context: { supabase: any; userId: string }) {
-  const { data, error } = await context.supabase.rpc("has_role", {
-    _user_id: context.userId,
-    _role: "admin",
-  });
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("Forbidden: admin only");
+  const { data: roles } = await context.supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", context.userId);
+  const isAllowed = (roles ?? []).some((r: any) => r.role === "admin" || r.role === "sub_admin");
+  if (isAllowed) return;
+
+  try {
+    const { data: rpcAdmin } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (rpcAdmin) return;
+    const { data: rpcSubAdmin } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "sub_admin",
+    });
+    if (rpcSubAdmin) return;
+  } catch {
+    // Ignore RPC failure
+  }
+
+  throw new Error("Forbidden: admin or sub-admin only");
 }
 
 export type Employee = {
@@ -21,6 +38,7 @@ export type Employee = {
   staff_section: string | null;
   hourly_rate: number;
   is_active: boolean;
+  can_manage_projects?: boolean;
   is_clocked_in: boolean;
   role: "admin" | "sub_admin" | "employee";
   photo_url?: string | null;
@@ -29,8 +47,27 @@ export type Employee = {
 export const listEmployees = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<Employee[]> => {
-    await assertAdmin(context);
-    const [{ data: profiles, error }, { data: roles }, { data: openShifts }] = await Promise.all([
+    // Check permission: Admin, Sub-admin, or Project Manager
+    const { data: roles } = await context.supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", context.userId);
+    const isAdminOrSub = (roles ?? []).some((r: any) => r.role === "admin" || r.role === "sub_admin");
+    if (!isAdminOrSub) {
+      let canManageProjects = false;
+      try {
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(context.userId);
+        canManageProjects = Boolean(authUser?.user?.user_metadata?.can_manage_projects);
+      } catch {
+        // Ignore fallback
+      }
+      if (!canManageProjects) {
+        throw new Error("Forbidden: admin, sub-admin, or project manager only");
+      }
+    }
+
+    const [{ data: profiles, error }, { data: allRoles }, { data: openShifts }] = await Promise.all([
       context.supabase
         .from("profiles")
         .select("id, email, full_name, job_title, department, staff_section, hourly_rate, is_active")
@@ -40,7 +77,10 @@ export const listEmployees = createServerFn({ method: "GET" })
     ]);
     if (error) throw new Error(error.message);
 
-    const userMetaMap = new Map<string, { photo_url: string | null; employee_id: string | null }>();
+    const userMetaMap = new Map<
+      string,
+      { photo_url: string | null; employee_id: string | null; can_manage_projects: boolean }
+    >();
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { data: userList } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
@@ -48,6 +88,7 @@ export const listEmployees = createServerFn({ method: "GET" })
         userMetaMap.set(u.id, {
           photo_url: u.user_metadata?.photo_url ?? null,
           employee_id: u.user_metadata?.employee_id ?? null,
+          can_manage_projects: Boolean(u.user_metadata?.can_manage_projects),
         });
       });
     } catch {
@@ -56,20 +97,34 @@ export const listEmployees = createServerFn({ method: "GET" })
 
     const openShiftUserIds = new Set((openShifts ?? []).map((s: any) => s.user_id));
     const adminIds = new Set(
-      (roles ?? []).filter((r: any) => r.role === "admin").map((r: any) => r.user_id),
+      (allRoles ?? []).filter((r: any) => r.role === "admin").map((r: any) => r.user_id),
     );
     const subAdminIds = new Set(
-      (roles ?? []).filter((r: any) => r.role === "sub_admin").map((r: any) => r.user_id),
+      (allRoles ?? []).filter((r: any) => r.role === "sub_admin").map((r: any) => r.user_id),
     );
-    return (profiles ?? []).map((p: any) => ({
-      ...p,
-      employee_id: userMetaMap.get(p.id)?.employee_id ?? (p as any).employee_id ?? null,
-      staff_section: p.staff_section ?? "IT Team",
-      hourly_rate: Number(p.hourly_rate ?? 0),
-      is_clocked_in: openShiftUserIds.has(p.id),
-      role: adminIds.has(p.id) ? "admin" : subAdminIds.has(p.id) ? "sub_admin" : "employee",
-      photo_url: userMetaMap.get(p.id)?.photo_url ?? null,
-    }));
+    return (profiles ?? []).map((p: any) => {
+      const userMeta = userMetaMap.get(p.id);
+      const role: "admin" | "sub_admin" | "employee" = adminIds.has(p.id)
+        ? "admin"
+        : subAdminIds.has(p.id)
+          ? "sub_admin"
+          : "employee";
+
+      return {
+        ...p,
+        employee_id: userMeta?.employee_id ?? (p as any).employee_id ?? null,
+        staff_section: p.staff_section ?? "IT Team",
+        hourly_rate: Number(p.hourly_rate ?? 0),
+        is_clocked_in: openShiftUserIds.has(p.id),
+        can_manage_projects:
+          role === "admin" ||
+          role === "sub_admin" ||
+          Boolean(userMeta?.can_manage_projects) ||
+          Boolean((p as any).can_manage_projects),
+        role,
+        photo_url: userMeta?.photo_url ?? null,
+      };
+    });
   });
 
 const createInput = z.object({

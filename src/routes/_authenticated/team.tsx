@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   Activity,
   ArrowRight,
@@ -39,6 +40,7 @@ import {
   getTeamHourlyReport,
   getTeamMembers,
   toggleEmployeeActiveStatus,
+  toggleProjectManagementAccess,
   type EmployeeAllData,
   type TeamHourlyReportRow,
   type TeamMember,
@@ -130,6 +132,32 @@ function TeamPage() {
       qc.invalidateQueries({ queryKey: ["team-members"] });
       qc.invalidateQueries({ queryKey: ["team-report"] });
       qc.invalidateQueries({ queryKey: ["employees"] });
+    },
+  });
+
+  const togglePmFn = useServerFn(toggleProjectManagementAccess);
+  const togglePmMutation = useMutation({
+    mutationFn: (v: { employeeId: string; canManage: boolean }) => togglePmFn({ data: v }),
+    onMutate: async ({ employeeId, canManage }) => {
+      await qc.cancelQueries({ queryKey: ["team-members"] });
+      const prev = qc.getQueryData<TeamMember[]>(["team-members"]);
+      if (prev) {
+        qc.setQueryData<TeamMember[]>(
+          ["team-members"],
+          prev.map((m) => (m.id === employeeId ? { ...m, canManageProjects: canManage } : m)),
+        );
+      }
+      return { prev };
+    },
+    onError: (err: any, _vars, context) => {
+      if (context?.prev) {
+        qc.setQueryData(["team-members"], context.prev);
+      }
+      toast.error(err?.message || "Failed to update project access");
+    },
+    onSuccess: (res) => {
+      toast.success(res.message);
+      void qc.invalidateQueries({ queryKey: ["team-members"] });
     },
   });
 
@@ -403,6 +431,7 @@ function TeamPage() {
                       <th className="px-4 py-3.5">Role</th>
                       <th className="px-4 py-3.5">Job Title & Dept</th>
                       <th className="px-4 py-3.5">Live Shift</th>
+                      <th className="px-4 py-3.5">Project Access</th>
                       <th className="px-4 py-3.5">Account Status</th>
                       <th className="px-4 py-3.5 text-right">Actions</th>
                     </tr>
@@ -470,6 +499,41 @@ function TeamPage() {
                           )}
                         </td>
                         <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                          {member.role === "admin" || member.role === "sub_admin" ? (
+                            <span className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                              <Shield className="size-3" /> Full (Role)
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                togglePmMutation.mutate({
+                                  employeeId: member.id,
+                                  canManage: !member.canManageProjects,
+                                })
+                              }
+                              disabled={togglePmMutation.isPending}
+                              title={
+                                member.canManageProjects
+                                  ? "Click to revoke project management privileges"
+                                  : "Click to grant project management privileges"
+                              }
+                              className={`group/pm inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-all ${
+                                member.canManageProjects
+                                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 shadow-xs"
+                                  : "border-border bg-secondary/60 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                              }`}
+                            >
+                              <FolderKanban
+                                className={`size-3.5 transition-transform group-hover/pm:scale-110 ${
+                                  member.canManageProjects ? "text-emerald-500" : "text-muted-foreground"
+                                }`}
+                              />
+                              <span>{member.canManageProjects ? "PM Enabled" : "No Access"}</span>
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() =>
                               toggleActiveMutation.mutate({
@@ -523,6 +587,9 @@ function TeamPage() {
                   onSelect={() => setSelectedEmployeeId(member.id)}
                   onToggleActive={(active) =>
                     toggleActiveMutation.mutate({ id: member.id, active })
+                  }
+                  onTogglePm={(canManage) =>
+                    togglePmMutation.mutate({ employeeId: member.id, canManage })
                   }
                 />
               ))}
@@ -793,10 +860,12 @@ function EmployeeCard({
   member,
   onSelect,
   onToggleActive,
+  onTogglePm,
 }: {
   member: TeamMember;
   onSelect: () => void;
   onToggleActive: (active: boolean) => void;
+  onTogglePm?: (canManage: boolean) => void;
 }) {
   return (
     <div
@@ -881,6 +950,43 @@ function EmployeeCard({
               <span className="size-2 rounded-full bg-muted-foreground/40" />
               <span>Off Duty · {member.isActive ? "Active Account" : "Disabled"}</span>
             </div>
+          )}
+        </div>
+
+        {/* Project Management Access Strip */}
+        <div className="mt-3 flex items-center justify-between rounded-md border border-border/70 bg-secondary/30 px-3 py-1.5 text-xs">
+          <span className="flex items-center gap-1.5 font-medium text-muted-foreground">
+            <FolderKanban className="size-3.5" /> Project Access
+          </span>
+          {member.role === "admin" || member.role === "sub_admin" ? (
+            <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+              <Shield className="size-2.5" /> Full (Role)
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePm?.(!member.canManageProjects);
+              }}
+              title={
+                member.canManageProjects
+                  ? "Click to revoke project management privileges"
+                  : "Click to grant project management privileges"
+              }
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-all ${
+                member.canManageProjects
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 shadow-xs"
+                  : "border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
+              }`}
+            >
+              <span
+                className={`size-1.5 rounded-full ${
+                  member.canManageProjects ? "bg-emerald-500" : "bg-muted-foreground/50"
+                }`}
+              />
+              {member.canManageProjects ? "PM Enabled" : "No Access"}
+            </button>
           )}
         </div>
       </div>
@@ -1453,6 +1559,29 @@ function EmployeeAllDataModal({
                           <UserCheck className="size-3.5" />
                           {data.profile.isActive ? "Active Account" : "Suspended / Inactive"}
                         </span>
+                      </div>
+                      <div>
+                        <span className="block text-xs text-muted-foreground">Project Management Access</span>
+                        <div className="mt-1">
+                          {data.profile.role === "admin" || data.profile.role === "sub_admin" ? (
+                            <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                              <Shield className="size-3" /> Full Privileges (Role)
+                            </span>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center gap-1.5 text-xs font-medium ${
+                                data.profile.canManageProjects
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              <FolderKanban className="size-3.5" />
+                              {data.profile.canManageProjects
+                                ? "Project Manager (Access Granted)"
+                                : "No Project Management Access"}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div>
                         <span className="block text-xs text-muted-foreground">Member Since</span>

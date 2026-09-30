@@ -25,6 +25,7 @@ export type LocalProfile = {
   staff_section?: "IT Team" | "BI Staff" | string | null;
   hourly_rate: number;
   is_active: boolean;
+  can_manage_projects?: boolean;
   created_at: string;
   updated_at: string;
   // Extended fields
@@ -284,6 +285,7 @@ export function generateSeedData(): LocalDatabaseSchema {
     staff_section: u.id === SEED_EMPLOYEE_ID ? "BI Staff" : "IT Team",
     hourly_rate: u.hourlyRate,
     is_active: u.isActive,
+    can_manage_projects: u.role === "admin" || u.role === "sub_admin",
     created_at: u.createdAt,
     updated_at: u.createdAt,
     gender: null,

@@ -42,14 +42,30 @@ export type ProjectSession = {
   staff_section?: string;
 };
 
+export async function checkCanManageProjects(supabase: any, userId: string): Promise<boolean> {
+  const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
+  const isSubAdmin = (roles ?? []).some((r: any) => r.role === "sub_admin");
+  if (isAdmin || isSubAdmin) return true;
+
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (authUser?.user?.user_metadata?.can_manage_projects) return true;
+  } catch {
+    // Ignore error
+  }
+
+  return false;
+}
+
 export const getMyProjects = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<Project[]> => {
     const { supabase, userId } = context;
 
-    // Determine user role
-    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-    const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
+    // Determine user role & permissions
+    const canManageProjects = await checkCanManageProjects(supabase, userId);
 
     // Get all projects & metadata
     const [{ data: allProjects, error: pErr }, { data: profiles }, { data: assignments }, { data: sessions }] =
@@ -71,8 +87,8 @@ export const getMyProjects = createServerFn({ method: "GET" })
     );
 
     // Filter by Visibility Rules:
-    // Admin manages and oversees ALL projects; Employees view projects assigned to them
-    const filteredProjects = isAdmin
+    // Admin, Sub-Admin & privileged Project Managers oversee ALL projects; standard Employees view projects assigned to them
+    const filteredProjects = canManageProjects
       ? (allProjects ?? [])
       : (allProjects ?? []).filter((p: any) => assignedProjectIds.has(p.id));
 
@@ -448,11 +464,9 @@ export const createProject = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-    const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
-
-    if (!isAdmin) {
-      throw new Error("Unauthorized: Only Admin can create new projects.");
+    const canManage = await checkCanManageProjects(supabase, userId);
+    if (!canManage) {
+      throw new Error("Unauthorized: Only Admin or Project Managers can create new projects.");
     }
 
     let payload: Record<string, any> = {
@@ -526,11 +540,9 @@ export const updateProject = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-    const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
-
-    if (!isAdmin) {
-      throw new Error("Unauthorized: Only Admin can edit projects.");
+    const canManage = await checkCanManageProjects(supabase, userId);
+    if (!canManage) {
+      throw new Error("Unauthorized: Only Admin or Project Managers can edit projects.");
     }
 
     const nowIso = new Date().toISOString();
@@ -609,11 +621,9 @@ export const deleteProject = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-    const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
-
-    if (!isAdmin) {
-      throw new Error("Unauthorized: Only Admin can delete projects.");
+    const canManage = await checkCanManageProjects(supabase, userId);
+    if (!canManage) {
+      throw new Error("Unauthorized: Only Admin or Project Managers can delete projects.");
     }
 
     // Clean up project relations first
@@ -640,12 +650,9 @@ export const assignEmployeesToProject = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    // Check roles - Admin assigns directly to employees
-    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-    const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
-
-    if (!isAdmin) {
-      throw new Error("Unauthorized: Only Admin can assign employees to projects.");
+    const canManage = await checkCanManageProjects(supabase, userId);
+    if (!canManage) {
+      throw new Error("Unauthorized: Only Admin or Project Managers can assign employees to projects.");
     }
 
     // Delete existing assignments for this project
@@ -729,10 +736,8 @@ export const getProjectsManagementList = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
 
-    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-    const isAdmin = (roles ?? []).some((r: any) => r.role === "admin");
-
-    if (!isAdmin) {
+    const canManage = await checkCanManageProjects(supabase, userId);
+    if (!canManage) {
       throw new Error("Unauthorized to access project management.");
     }
 

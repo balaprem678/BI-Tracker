@@ -27,10 +27,12 @@ import {
   Clock,
   MessageSquareQuote,
   ArrowRight,
+  FolderKanban,
+  Shield,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { getSessionInfo } from "@/lib/tracker.functions";
-import { getEmployeeAllData } from "@/lib/team.functions";
+import { getEmployeeAllData, toggleProjectManagementAccess } from "@/lib/team.functions";
 import {
   getEmployeeProfileById,
   updateMyProfile,
@@ -460,6 +462,30 @@ function AdminEmployeeProfile() {
   const isSelf = session.data?.userId === id;
   const isActive = profileData ? profileData.is_active ?? true : true;
 
+  const isPrivilegedRole =
+    allDataQuery.data?.profile?.role === "admin" ||
+    allDataQuery.data?.profile?.role === "sub_admin";
+
+  const canManageProjects =
+    isPrivilegedRole ||
+    Boolean(profileData?.can_manage_projects || allDataQuery.data?.profile?.canManageProjects);
+
+  const togglePmFn = useServerFn(toggleProjectManagementAccess);
+  const togglePmMutation = useMutation({
+    mutationFn: (canManage: boolean) =>
+      togglePmFn({ data: { employeeId: id, canManage } }),
+    onSuccess: (res) => {
+      toast.success(res.message);
+      qc.invalidateQueries({ queryKey: ["employee-profile", id] });
+      qc.invalidateQueries({ queryKey: ["employee-all-data", id] });
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["team-members"] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "Failed to update project management access");
+    },
+  });
+
   const toggleActive = useMutation({
     mutationFn: (targetActive: boolean) =>
       toggleActiveFn({
@@ -597,7 +623,40 @@ function AdminEmployeeProfile() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {isPrivilegedRole ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-3.5 py-2.5 text-xs font-semibold text-primary">
+                <Shield className="size-4" /> Full Project Access ({allDataQuery.data?.profile?.role})
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => togglePmMutation.mutate(!canManageProjects)}
+                disabled={togglePmMutation.isPending}
+                title={
+                  canManageProjects
+                    ? "Click to revoke project management privileges"
+                    : "Click to grant project management privileges"
+                }
+                className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2.5 text-sm font-medium transition-all ${
+                  canManageProjects
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 shadow-xs"
+                    : "border-border bg-secondary/80 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                } disabled:opacity-50`}
+              >
+                <FolderKanban
+                  className={`size-4 ${
+                    canManageProjects ? "text-emerald-500" : "text-muted-foreground"
+                  }`}
+                />
+                {togglePmMutation.isPending
+                  ? "Updating…"
+                  : canManageProjects
+                  ? "PM Access: Enabled"
+                  : "PM Access: Disabled"}
+              </button>
+            )}
+
             {!isSelf && (
               <button
                 type="button"
@@ -779,35 +838,92 @@ function AdminEmployeeProfile() {
         )}
 
         {activeTab === "employment" && (
-          <SectionCard>
-            <SectionTitle icon={<Briefcase className="size-4" />} title="Employment Information" />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Designation / Job Title" value={form.jobTitle} onChange={set("jobTitle")} placeholder="e.g. Senior Analyst" />
-              <Field label="Department" value={form.department} onChange={set("department")} placeholder="e.g. Business Intelligence" />
-              <SelectField
-                label="Staff Section"
-                value={form.staffSection}
-                onChange={set("staffSection")}
-                options={[
-                  { value: "IT Team", label: "IT Team" },
-                  { value: "BI Staff", label: "BI Staff" },
-                ]}
+          <div className="space-y-5">
+            <SectionCard>
+              <SectionTitle icon={<Briefcase className="size-4" />} title="Employment Information" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Designation / Job Title" value={form.jobTitle} onChange={set("jobTitle")} placeholder="e.g. Senior Analyst" />
+                <Field label="Department" value={form.department} onChange={set("department")} placeholder="e.g. Business Intelligence" />
+                <SelectField
+                  label="Staff Section"
+                  value={form.staffSection}
+                  onChange={set("staffSection")}
+                  options={[
+                    { value: "IT Team", label: "IT Team" },
+                    { value: "BI Staff", label: "BI Staff" },
+                  ]}
+                />
+                <SelectField
+                  label="Job Type"
+                  value={form.jobType}
+                  onChange={set("jobType")}
+                  options={[
+                    { value: "full-time", label: "Full-time" },
+                    { value: "part-time", label: "Part-time" },
+                    { value: "contract", label: "Contract" },
+                    { value: "intern", label: "Intern" },
+                  ]}
+                />
+                <Field label="Joining Date" value={form.joiningDate} onChange={set("joiningDate")} type="date" />
+                <Field label="Work Location" value={form.workLocation} onChange={set("workLocation")} placeholder="e.g. Bangalore / Remote" />
+              </div>
+            </SectionCard>
+
+            <SectionCard>
+              <SectionTitle
+                icon={<FolderKanban className="size-4" />}
+                title="Project Management Access & Module Privileges"
+                hint="Control whether this employee can create projects, assign staff, view company-wide project reports, and access the Project Management module in their navigation."
               />
-              <SelectField
-                label="Job Type"
-                value={form.jobType}
-                onChange={set("jobType")}
-                options={[
-                  { value: "full-time", label: "Full-time" },
-                  { value: "part-time", label: "Part-time" },
-                  { value: "contract", label: "Contract" },
-                  { value: "intern", label: "Intern" },
-                ]}
-              />
-              <Field label="Joining Date" value={form.joiningDate} onChange={set("joiningDate")} type="date" />
-              <Field label="Work Location" value={form.workLocation} onChange={set("workLocation")} placeholder="e.g. Bangalore / Remote" />
-            </div>
-          </SectionCard>
+              <div className="flex flex-col gap-4 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-foreground">
+                      Project Management Privileges
+                    </p>
+                    {canManageProjects ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="size-3" /> Active
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                        Disabled
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground max-w-xl">
+                    When enabled, the <strong>Project Management</strong> menu item will dynamically appear in their sidebar navigation. The employee will have full access to view, create, edit, and assign team members to projects.
+                  </p>
+                </div>
+
+                <div className="shrink-0">
+                  {isPrivilegedRole ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/10 px-3.5 py-2 text-xs font-semibold text-primary">
+                      <Shield className="size-4" /> Full Access by Role ({allDataQuery.data?.profile?.role})
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => togglePmMutation.mutate(!canManageProjects)}
+                      disabled={togglePmMutation.isPending}
+                      className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-xs font-semibold transition-all ${
+                        canManageProjects
+                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400 shadow-xs"
+                          : "border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
+                      } disabled:opacity-50`}
+                    >
+                      <FolderKanban className="size-3.5" />
+                      {togglePmMutation.isPending
+                        ? "Updating…"
+                        : canManageProjects
+                        ? "Revoke Project Access"
+                        : "Grant Project Access"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </SectionCard>
+          </div>
         )}
 
         {activeTab === "leave" && (

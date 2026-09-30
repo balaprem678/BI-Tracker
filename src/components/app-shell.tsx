@@ -193,9 +193,11 @@ export function AppShell({
   }, [session?.userId, signOut]);
 
   const role = session?.role;
+  const canAccessProjects = role === "admin" || role === "sub_admin" || Boolean(session?.canManageProjects);
+
   const nav =
     role === "sub_admin"
-      ? [{ to: "/project", label: "Project", icon: FolderKanban }]
+      ? [{ to: "/project", label: "Project Management", icon: FolderKanban }]
       : role === "admin"
         ? [
             { to: "/admin", label: "Admin Panel", icon: ShieldCheck },
@@ -203,19 +205,19 @@ export function AppShell({
             { to: "/admin/salary", label: "Salary / Payroll", icon: DollarSign },
             { to: "/team", label: "IT Team", icon: Users },
             { to: "/bi-staff", label: "BI Staff", icon: UserRound },
-            { to: "/project", label: "Project", icon: FolderKanban },
+            { to: "/project", label: "Project Management", icon: FolderKanban },
             { to: "/settings", label: "Setting", icon: Settings },
           ]
         : [
             { to: "/dashboard", label: "Dashboard", icon: Clock },
-            { to: "/project", label: "Project", icon: FolderKanban },
+            ...(canAccessProjects ? [{ to: "/project", label: "Project Management", icon: FolderKanban }] : []),
             { to: "/leave", label: "Leave", icon: CalendarDays },
             { to: "/settings", label: "Setting", icon: Settings },
           ];
 
   const tabs =
     role === "sub_admin"
-      ? [{ to: "/project", label: "Project", icon: FolderKanban }]
+      ? [{ to: "/project", label: "Project Management", icon: FolderKanban }]
       : role === "admin"
         ? [
             { to: "/admin", label: "Admin Panel", icon: ShieldCheck },
@@ -223,11 +225,11 @@ export function AppShell({
             { to: "/admin/salary", label: "Salary", icon: DollarSign },
             { to: "/team", label: "IT Team", icon: Users },
             { to: "/bi-staff", label: "BI Staff", icon: UserRound },
-            { to: "/project", label: "Project", icon: FolderKanban },
+            { to: "/project", label: "Project Management", icon: FolderKanban },
           ]
         : [
             { to: "/dashboard", label: "My Shift", icon: Clock },
-            { to: "/project", label: "Project", icon: FolderKanban },
+            ...(canAccessProjects ? [{ to: "/project", label: "Project Management", icon: FolderKanban }] : []),
             { to: "/leave", label: "Leave", icon: CalendarDays },
           ];
 

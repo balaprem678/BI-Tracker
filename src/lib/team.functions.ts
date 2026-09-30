@@ -4,12 +4,29 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { parseLeaveTimeSlot } from "@/lib/leave.functions";
 
 async function assertAdmin(context: { supabase: any; userId: string }) {
-  const { data, error } = await context.supabase.rpc("has_role", {
-    _user_id: context.userId,
-    _role: "admin",
-  });
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("Forbidden: admin access only");
+  const { data: roles } = await context.supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", context.userId);
+  const isAllowed = (roles ?? []).some((r: any) => r.role === "admin" || r.role === "sub_admin");
+  if (isAllowed) return;
+
+  try {
+    const { data: rpcAdmin } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (rpcAdmin) return;
+    const { data: rpcSubAdmin } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "sub_admin",
+    });
+    if (rpcSubAdmin) return;
+  } catch {
+    // Ignore RPC failure
+  }
+
+  throw new Error("Forbidden: admin or sub-admin access only");
 }
 
 export type TeamMember = {
@@ -23,6 +40,7 @@ export type TeamMember = {
   hourlyRate: number;
   role: "admin" | "sub_admin" | "employee";
   isActive: boolean;
+  canManageProjects: boolean;
   isClockedIn: boolean;
   currentShiftClockIn: string | null;
   todayHoursWorked: number;
@@ -86,6 +104,7 @@ export type EmployeeAllData = {
     hourlyRate: number;
     role: "admin" | "sub_admin" | "employee";
     isActive: boolean;
+    canManageProjects: boolean;
     photoUrl?: string | null;
     createdAt: string;
     updatedAt: string;
@@ -203,7 +222,10 @@ export const getTeamMembers = createServerFn({ method: "GET" })
       openShiftMap.set(os.user_id, os.clock_in);
     }
 
-    const userMetaMap = new Map<string, { photo_url: string | null; employee_id: string | null }>();
+    const userMetaMap = new Map<
+      string,
+      { photo_url: string | null; employee_id: string | null; can_manage_projects: boolean }
+    >();
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { data: userList } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
@@ -211,6 +233,7 @@ export const getTeamMembers = createServerFn({ method: "GET" })
         userMetaMap.set(u.id, {
           photo_url: u.user_metadata?.photo_url ?? null,
           employee_id: u.user_metadata?.employee_id ?? null,
+          can_manage_projects: Boolean(u.user_metadata?.can_manage_projects),
         });
       });
     } catch {
@@ -244,9 +267,11 @@ export const getTeamMembers = createServerFn({ method: "GET" })
           ? "sub_admin"
           : "employee";
 
+      const userMeta = userMetaMap.get(p.id);
+
       return {
         id: p.id,
-        employeeId: userMetaMap.get(p.id)?.employee_id ?? p.employee_id ?? null,
+        employeeId: userMeta?.employee_id ?? p.employee_id ?? null,
         fullName: p.full_name || p.email || "Unnamed Employee",
         email: p.email ?? null,
         jobTitle: p.job_title ?? null,
@@ -255,6 +280,11 @@ export const getTeamMembers = createServerFn({ method: "GET" })
         hourlyRate: Number(p.hourly_rate ?? 0),
         role,
         isActive: p.is_active ?? true,
+        canManageProjects:
+          role === "admin" ||
+          role === "sub_admin" ||
+          Boolean(userMeta?.can_manage_projects) ||
+          Boolean(p.can_manage_projects),
         isClockedIn,
         currentShiftClockIn,
         todayHoursWorked: Math.round(todayHours * 100) / 100,
@@ -262,7 +292,7 @@ export const getTeamMembers = createServerFn({ method: "GET" })
         totalShiftsCount: userAllShifts.length,
         totalLoggedHours: userAllLogs.length,
         createdAt: p.created_at || new Date().toISOString(),
-        photoUrl: userMetaMap.get(p.id)?.photo_url ?? null,
+        photoUrl: userMeta?.photo_url ?? null,
       };
     });
   });
@@ -443,11 +473,13 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
 
     let photoUrl: string | null = null;
     let customEmployeeId: string | null = null;
+    let metaCanManageProjects = false;
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { data: userAuthData } = await supabaseAdmin.auth.admin.getUserById(employeeId);
       photoUrl = userAuthData?.user?.user_metadata?.photo_url ?? null;
       customEmployeeId = userAuthData?.user?.user_metadata?.employee_id ?? null;
+      metaCanManageProjects = Boolean(userAuthData?.user?.user_metadata?.can_manage_projects);
     } catch {
       // Ignore fallback errors
     }
@@ -464,6 +496,11 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
         hourlyRate: Number(profile.hourly_rate ?? 0),
         role,
         isActive: profile.is_active ?? true,
+        canManageProjects:
+          role === "admin" ||
+          role === "sub_admin" ||
+          metaCanManageProjects ||
+          Boolean((profile as any).can_manage_projects),
         photoUrl,
         createdAt: profile.created_at || new Date().toISOString(),
         updatedAt: profile.updated_at || new Date().toISOString(),
@@ -678,5 +715,52 @@ export const toggleEmployeeActiveStatus = createServerFn({ method: "POST" })
       message: data.active
         ? "Account activated successfully."
         : "Account deactivated and active sessions stopped.",
+    };
+  });
+
+export const toggleProjectManagementAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { employeeId: string; canManage: boolean }) =>
+    z
+      .object({
+        employeeId: z.string().min(1),
+        canManage: z.boolean(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+
+    // 1. Update user_metadata in auth (persists reliably regardless of table columns)
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: userAuthData } = await supabaseAdmin.auth.admin.getUserById(data.employeeId);
+      const currentMeta = userAuthData?.user?.user_metadata ?? {};
+      await supabaseAdmin.auth.admin.updateUserById(data.employeeId, {
+        user_metadata: {
+          ...currentMeta,
+          can_manage_projects: data.canManage,
+        },
+      });
+    } catch (authErr: any) {
+      console.warn("Could not update auth user_metadata for project access:", authErr?.message);
+    }
+
+    // 2. Also update profiles table if column exists
+    try {
+      await context.supabase
+        .from("profiles")
+        .update({ can_manage_projects: data.canManage })
+        .eq("id", data.employeeId);
+    } catch {
+      // Column might not exist in profiles table yet
+    }
+
+    return {
+      ok: true as const,
+      canManage: data.canManage,
+      message: data.canManage
+        ? "Project management access granted."
+        : "Project management access revoked.",
     };
   });

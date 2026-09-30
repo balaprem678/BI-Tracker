@@ -141,10 +141,11 @@ function ProjectPage() {
   });
 
   const isAdmin = session?.role === "admin";
-  const isPrivileged = isAdmin;
+  const isSubAdmin = session?.role === "sub_admin";
+  const isPrivileged = isAdmin || isSubAdmin || Boolean(session?.canManageProjects);
 
   const { data: projectsList = [], isLoading: projectsLoading } = useQuery({
-    queryKey: ["my-projects", session?.role],
+    queryKey: ["my-projects", session?.role, session?.canManageProjects],
     queryFn: () => myProjectsFn({}),
     enabled: !!session,
   });
@@ -273,14 +274,14 @@ function ProjectPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              {isAdmin ? "Project Management & Workforce Allocation" : "My Assigned Projects"}
+              {isPrivileged ? "Project Management & Workforce Allocation" : "My Assigned Projects"}
             </h1>
             <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-              {isAdmin ? "Admin Scope (All Projects)" : "Assigned Projects Scope"}
+              {isAdmin ? "Admin Scope (All Projects)" : isPrivileged ? "Project Manager Scope (All Projects)" : "Assigned Projects Scope"}
             </span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {isAdmin
+            {isPrivileged
               ? "Create projects, directly assign employees, manage milestones, and monitor real-time workforce analytics."
               : "Track your assigned project tasks, progress %, and daily session logs."}
           </p>
@@ -317,7 +318,7 @@ function ProjectPage() {
           </div>
 
           {/* Action Buttons */}
-          {isAdmin && (
+          {isPrivileged && (
             <button
               onClick={() => {
                 setShowCreateModal(true);
@@ -535,7 +536,7 @@ function ProjectPage() {
                   {/* Actions Bar */}
                   <div className="mt-5 flex items-center justify-between gap-2 border-t border-border/50 pt-3">
                     <div className="flex items-center gap-2">
-                      {isAdmin && (
+                      {isPrivileged && (
                         <button
                           onClick={() => {
                             setSelectedProjectForAssign(project);
@@ -565,7 +566,7 @@ function ProjectPage() {
                       </button>
                     </div>
 
-                    {isAdmin && (
+                    {isPrivileged && (
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => setSelectedProjectForEdit(project)}
@@ -661,7 +662,7 @@ function ProjectPage() {
                         <td className="px-4 py-3.5 font-mono">{project.logged_hours || 0} hrs</td>
                         <td className="px-4 py-3.5 font-semibold">{project.priority}</td>
                         <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
-                          {isAdmin && (
+                          {isPrivileged && (
                             <button
                               onClick={() => {
                                 setSelectedProjectForAssign(project);
@@ -686,7 +687,7 @@ function ProjectPage() {
                           >
                             Update
                           </button>
-                          {isAdmin && (
+                          {isPrivileged && (
                             <>
                               <button
                                 onClick={() => setSelectedProjectForEdit(project)}

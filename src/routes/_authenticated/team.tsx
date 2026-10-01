@@ -32,9 +32,13 @@ import {
   UserRound,
   Users,
   X,
+  Pencil,
+  MapPin,
+  Check,
+  Loader2,
 } from "lucide-react";
 import { AppShell, Panel, Stat } from "@/components/app-shell";
-import { getSessionInfo } from "@/lib/tracker.functions";
+import { getSessionInfo, updateShiftLocation } from "@/lib/tracker.functions";
 import {
   getEmployeeAllData,
   getTeamHourlyReport,
@@ -1035,6 +1039,28 @@ function EmployeeAllDataModal({
     queryFn: () => getEmployeeFn({ data: { employeeId } }),
   });
 
+  const qc = useQueryClient();
+  const updateLocFn = useServerFn(updateShiftLocation);
+  const [editingShiftLoc, setEditingShiftLoc] = useState<{ id: string; type: "in" | "out"; currentLoc: string } | null>(null);
+  const [newLocInput, setNewLocInput] = useState("");
+
+  const updateLocMutation = useMutation({
+    mutationFn: (args: { shiftId: string; locationType: "in" | "out"; locationName: string }) =>
+      updateLocFn({
+        data: {
+          shiftId: args.shiftId,
+          locationType: args.locationType,
+          locationName: args.locationName,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Shift location updated successfully");
+      qc.invalidateQueries({ queryKey: ["employee-all-data", employeeId] });
+      setEditingShiftLoc(null);
+    },
+    onError: (e: any) => toast.error(e.message || "Failed to update location"),
+  });
+
   const [isFullscreen, setIsFullscreen] = useState(true);
   const [activeTab, setActiveTab] = useState<"logs" | "shifts" | "leaves" | "profile">("logs");
   const [logSearch, setLogSearch] = useState("");
@@ -1412,7 +1438,7 @@ function EmployeeAllDataModal({
                                   )}
                                 </td>
                                 <td className="px-4 py-3 text-foreground">
-                                  <div className="flex flex-col gap-1 text-xs">
+                                  <div className="flex flex-col gap-1.5 text-xs">
                                     <div className="flex items-center gap-1.5 font-medium text-foreground">
                                       <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                                         In
@@ -1422,6 +1448,17 @@ function EmployeeAllDataModal({
                                       ) : (
                                         <span className="text-[11px] italic text-muted-foreground">Not recorded</span>
                                       )}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingShiftLoc({ id: s.id, type: "in", currentLoc: s.clockInLocationName || "" });
+                                          setNewLocInput(s.clockInLocationName || (data?.profile?.workLocation ? `${data.profile.workLocation}, Tamil Nadu, India` : ""));
+                                        }}
+                                        className="ml-1 text-muted-foreground hover:text-primary transition-colors p-0.5"
+                                        title="Edit Clock-In location"
+                                      >
+                                        <Pencil className="size-3" />
+                                      </button>
                                     </div>
                                     {s.clockOut && (
                                       <div className="flex items-center gap-1.5 font-medium text-foreground">
@@ -1433,6 +1470,17 @@ function EmployeeAllDataModal({
                                         ) : (
                                           <span className="text-[11px] italic text-muted-foreground">Not recorded</span>
                                         )}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingShiftLoc({ id: s.id, type: "out", currentLoc: s.clockOutLocationName || "" });
+                                            setNewLocInput(s.clockOutLocationName || (data?.profile?.workLocation ? `${data.profile.workLocation}, Tamil Nadu, India` : ""));
+                                          }}
+                                          className="ml-1 text-muted-foreground hover:text-primary transition-colors p-0.5"
+                                          title="Edit Clock-Out location"
+                                        >
+                                          <Pencil className="size-3" />
+                                        </button>
                                       </div>
                                     )}
                                   </div>
@@ -1603,6 +1651,93 @@ function EmployeeAllDataModal({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Edit Shift Location Modal */}
+        {editingShiftLoc && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+            <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <MapPin className="size-4 text-primary" />
+                  <h4 className="font-semibold text-sm text-foreground">
+                    Edit {editingShiftLoc.type === "in" ? "Clock-In" : "Clock-Out"} Location
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingShiftLoc(null)}
+                  className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="text-xs text-muted-foreground">
+                  Current recorded: <span className="font-medium text-foreground">{editingShiftLoc.currentLoc || "None"}</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-foreground">Correct Location Name</label>
+                  <input
+                    type="text"
+                    value={newLocInput}
+                    onChange={(e) => setNewLocInput(e.target.value)}
+                    placeholder="e.g. City, State, Country"
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                <div className="pt-1">
+                  <p className="text-[11px] text-muted-foreground mb-1.5 font-medium">Quick Options:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {data?.profile?.workLocation && (
+                      <button
+                        type="button"
+                        onClick={() => setNewLocInput(data.profile.workLocation!)}
+                        className="rounded-md bg-primary/10 border border-primary/20 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                      >
+                        {data.profile.workLocation} (Profile)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setEditingShiftLoc(null)}
+                  className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={updateLocMutation.isPending || !newLocInput.trim()}
+                  onClick={() => {
+                    updateLocMutation.mutate({
+                      shiftId: editingShiftLoc.id,
+                      locationType: editingShiftLoc.type,
+                      locationName: newLocInput.trim(),
+                    });
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {updateLocMutation.isPending ? (
+                    <>
+                      <Loader2 className="size-3 animate-spin" /> Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="size-3" /> Save Changes
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}

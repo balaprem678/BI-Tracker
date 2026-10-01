@@ -16,10 +16,22 @@ import {
   ShieldAlert,
   X,
   CalendarDays,
+  Search,
+  Check,
+  RotateCcw,
+  Loader2,
 } from "lucide-react";
 import { AppShell, Panel, Stat } from "@/components/app-shell";
 import { formatHours, formatDurationSeconds } from "@/lib/time-utils";
-import { getCurrentLocation } from "@/lib/location";
+import {
+  getCurrentLocation,
+  getCalibratedLocation,
+  saveCalibratedLocation,
+  clearCalibratedLocation,
+  searchLocation,
+  GeoLocationResult,
+} from "@/lib/location";
+import { getMyProfile } from "@/lib/profile.functions";
 import {
   clockIn,
   clockOut,
@@ -102,9 +114,32 @@ function Dashboard() {
   const [finalStatus, setFinalStatus] = useState("Completed");
   const [taskSummary, setTaskSummary] = useState("");
 
-  const isToday = selectedDate === today;
+  const profileFn = useServerFn(getMyProfile);
+  const { data: userProfile } = useQuery({
+    queryKey: ["my-profile"],
+    queryFn: () => profileFn({}),
+  });
 
   const { data: session } = useQuery({ queryKey: ["session"], queryFn: () => sessionFn({}) });
+
+  const [calibratedLoc, setCalibratedLoc] = useState<GeoLocationResult | null>(null);
+  const [showCalibrateModal, setShowCalibrateModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<GeoLocationResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isDetectingLive, setIsDetectingLive] = useState(false);
+
+  useEffect(() => {
+    if (session?.userId) {
+      try {
+        // Remove legacy un-scoped key to prevent shared computer bleed-through
+        localStorage.removeItem("bi_tracker_calibrated_location");
+      } catch {}
+      setCalibratedLoc(getCalibratedLocation(session.userId));
+    }
+  }, [session?.userId]);
+
+  const isToday = selectedDate === today;
   const { data: shifts } = useQuery({ queryKey: ["my-shifts"], queryFn: () => shiftsFn({}) });
   const { data: shiftAnalytics } = useQuery({
     queryKey: ["shift-analytics-today"],
@@ -219,8 +254,9 @@ function Dashboard() {
     setIsAcquiringLocation(true);
     setLocationErrorModal(null);
     try {
-      toast.info("Verification...");
-      const loc = await getCurrentLocation();
+      toast.info("Verifying location...");
+      const preferred = calibratedLoc?.locationName || userProfile?.work_location || undefined;
+      const loc = await getCurrentLocation(preferred, session?.userId);
       setIsAcquiringLocation(false);
       clockMutation.mutate({
         kind,
@@ -319,6 +355,35 @@ function Dashboard() {
                 </span>
               </div>
             )}
+            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/30 px-2 py-0.5 rounded border border-border/50">
+              <MapPin className="size-3 text-primary shrink-0" />
+              <span
+                className="truncate max-w-[160px] sm:max-w-[220px]"
+                title={
+                  openShift?.clock_in_location_name ||
+                  calibratedLoc?.locationName ||
+                  userProfile?.work_location ||
+                  "Auto-detect on Clock In"
+                }
+              >
+                {openShift?.clock_in_location_name ? (
+                  openShift.clock_in_location_name
+                ) : calibratedLoc?.locationName ? (
+                  calibratedLoc.locationName
+                ) : userProfile?.work_location ? (
+                  userProfile.work_location
+                ) : (
+                  <span className="italic text-muted-foreground/80">Auto-detect on Clock In</span>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowCalibrateModal(true)}
+                className="text-primary hover:underline font-semibold text-[10px] cursor-pointer shrink-0"
+              >
+                {calibratedLoc || userProfile?.work_location ? "Change" : "Set"}
+              </button>
+            </div>
           </div>
 
           <button
@@ -656,6 +721,196 @@ function Dashboard() {
               >
                 <Navigation className="size-3.5" />
                 Allow Location & Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Calibrate / Set Work Location */}
+      {showCalibrateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <MapPin className="size-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-foreground">Set Work / Current Location</h3>
+                  <p className="text-xs text-muted-foreground">Ensure accurate location recording for shifts</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCalibrateModal(false);
+                  setSearchQuery("");
+                  setSearchResults([]);
+                }}
+                className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <p className="mt-3 text-xs text-muted-foreground">
+              Select or detect your real physical location below to ensure your clock-in and clock-out shifts reflect your exact working area.
+            </p>
+
+            {/* Quick Actions */}
+            <div className="mt-4 space-y-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Location Options
+              </span>
+              <div className="grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  disabled={isDetectingLive}
+                  onClick={async () => {
+                    setIsDetectingLive(true);
+                    try {
+                      const loc = await getCurrentLocation(undefined, session?.userId);
+                      saveCalibratedLocation(loc, session?.userId);
+                      setCalibratedLoc(loc);
+                      setShowCalibrateModal(false);
+                      toast.success(`Location detected: ${loc.locationName}`);
+                    } catch (err: any) {
+                      toast.error(err.message || "Failed to detect device location");
+                    } finally {
+                      setIsDetectingLive(false);
+                    }
+                  }}
+                  className="flex items-center justify-between p-2.5 rounded-lg border border-primary/30 bg-primary/5 hover:bg-primary/10 text-left transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <MapPin className="size-4 text-primary shrink-0" />
+                    <div>
+                      <div className="text-xs font-semibold text-foreground">
+                        {isDetectingLive ? "Detecting Live Location..." : "Detect Device Location"}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Query current GPS and network location in real time
+                      </div>
+                    </div>
+                  </div>
+                  {isDetectingLive ? (
+                    <Loader2 className="size-4 animate-spin text-primary" />
+                  ) : (
+                    <span className="text-[10px] bg-primary/20 text-primary font-bold px-2 py-0.5 rounded">
+                      Live GPS
+                    </span>
+                  )}
+                </button>
+
+                {userProfile?.work_location && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const search = await searchLocation(userProfile.work_location!);
+                      const picked = search[0] || {
+                        latitude: 13.0827,
+                        longitude: 80.2707,
+                        locationName: userProfile.work_location,
+                        accuracy: 10,
+                        isCalibrated: true,
+                      };
+                      saveCalibratedLocation(picked, session?.userId);
+                      setCalibratedLoc(picked);
+                      setShowCalibrateModal(false);
+                      toast.success(`Location set to ${picked.locationName}`);
+                    }}
+                    className="flex items-center gap-2 p-2.5 rounded-lg border border-border bg-secondary/30 hover:bg-secondary/60 text-left transition-colors"
+                  >
+                    <Briefcase className="size-4 text-muted-foreground shrink-0" />
+                    <div className="text-xs">
+                      <div className="font-semibold text-foreground">{userProfile.work_location}</div>
+                      <div className="text-[11px] text-muted-foreground">From Assigned Employee Profile</div>
+                    </div>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Search Input */}
+            <div className="mt-4">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1 block">
+                Or Search Any City / Locality
+              </span>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={async (e) => {
+                    const q = e.target.value;
+                    setSearchQuery(q);
+                    if (q.trim().length >= 3) {
+                      setIsSearching(true);
+                      const results = await searchLocation(q);
+                      setSearchResults(results);
+                      setIsSearching(false);
+                    } else {
+                      setSearchResults([]);
+                    }
+                  }}
+                  placeholder="e.g. City, Area, or Landmark"
+                  className="w-full rounded-lg border border-input bg-background pl-8 pr-3 py-2 text-xs outline-none focus:border-primary"
+                />
+              </div>
+
+              {isSearching && (
+                <p className="mt-1 text-[11px] text-muted-foreground">Searching locations…</p>
+              )}
+
+              {searchResults.length > 0 && (
+                <div className="mt-2 max-h-36 overflow-y-auto divide-y divide-border rounded-lg border border-border bg-card">
+                  {searchResults.map((item, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        saveCalibratedLocation(item, session?.userId);
+                        setCalibratedLoc(item);
+                        setShowCalibrateModal(false);
+                        setSearchQuery("");
+                        setSearchResults([]);
+                        toast.success(`Location set to: ${item.locationName}`);
+                      }}
+                      className="w-full text-left p-2.5 text-xs hover:bg-secondary/40 transition-colors flex items-center justify-between"
+                    >
+                      <span className="truncate pr-2">{item.locationName}</span>
+                      <Check className="size-3.5 text-primary shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-between pt-4 border-t border-border/60">
+              <button
+                type="button"
+                onClick={() => {
+                  clearCalibratedLocation(session?.userId);
+                  setCalibratedLoc(null);
+                  setShowCalibrateModal(false);
+                  toast.info("Reset to live device detection");
+                }}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <RotateCcw className="size-3.5" />
+                Reset to Auto-Detect
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCalibrateModal(false);
+                  setSearchQuery("");
+                  setSearchResults([]);
+                }}
+                className="rounded-lg border border-border px-4 py-1.5 text-xs font-semibold text-foreground hover:bg-accent"
+              >
+                Done
               </button>
             </div>
           </div>

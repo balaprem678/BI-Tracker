@@ -420,9 +420,44 @@ export const saveHourlyLog = createServerFn({ method: "POST" })
 
 export const deleteHourlyLog = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
+  .validator((input: { id: string }) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("hourly_logs").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true as const };
+  });
+
+const updateShiftLocationInput = z.object({
+  shiftId: z.string().uuid(),
+  locationName: z.string().min(1),
+  locationType: z.enum(["in", "out", "both"]).default("both"),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+});
+
+export const updateShiftLocation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: z.input<typeof updateShiftLocationInput>) => updateShiftLocationInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const payload: any = {};
+    if (data.locationType === "in" || data.locationType === "both") {
+      payload.clock_in_location_name = data.locationName;
+      if (data.latitude && data.longitude) {
+        payload.clock_in_lat = data.latitude;
+        payload.clock_in_lng = data.longitude;
+      }
+    }
+    if (data.locationType === "out" || data.locationType === "both") {
+      payload.clock_out_location_name = data.locationName;
+      if (data.latitude && data.longitude) {
+        payload.clock_out_lat = data.latitude;
+        payload.clock_out_lng = data.longitude;
+      }
+    }
+    const { error } = await context.supabase
+      .from("shifts")
+      .update(payload)
+      .eq("id", data.shiftId);
+    if (error) throw new Error(error.message);
+    return { ok: true as const, message: "Location updated successfully." };
   });

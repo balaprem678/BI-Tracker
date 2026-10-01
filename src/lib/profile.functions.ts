@@ -263,6 +263,44 @@ export const updateMyProfile = createServerFn({ method: "POST" })
       console.error("Failed to update user_metadata in auth:", err);
     }
 
+    // 3. Keep employee_salary_structures in sync if salary is provided
+    if (data.salary != null && data.salary >= 0) {
+      try {
+        const gross = Number(data.salary);
+        const basic = Math.round(gross * 0.5);
+        const hra = Math.round(gross * 0.25);
+        const conveyance = Math.round(gross * 0.05);
+        const special = Math.max(0, gross - basic - hra - conveyance);
+        const pf = gross >= 15000 ? 1800 : Math.round(basic * 0.12);
+        const pt = gross >= 15000 ? 200 : 0;
+
+        const structPayload = {
+          user_id: targetId,
+          monthly_gross: gross,
+          basic_pay: basic,
+          hra,
+          conveyance,
+          special_allowance: special,
+          pf_deduction: pf,
+          pt_deduction: pt,
+          tds_deduction: 0,
+          other_deductions: 0,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error: sErr } = await context.supabase
+          .from("employee_salary_structures")
+          .upsert(structPayload, { onConflict: "user_id" });
+        if (sErr) {
+          const { createLocalSupabaseClient } = await import("@/integrations/supabase/local-db");
+          const local = createLocalSupabaseClient();
+          await local.from("employee_salary_structures").upsert(structPayload, { onConflict: "user_id" });
+        }
+      } catch (err) {
+        console.error("Failed to sync employee_salary_structures in updateMyProfile:", err);
+      }
+    }
+
     return { ok: true as const };
   });
 

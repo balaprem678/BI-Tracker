@@ -238,8 +238,20 @@ async function calculateMonthLopDays(
 
 export const getMySalaryOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .validator(
+    z
+      .object({
+        month_year: z.string().optional(),
+        monthYear: z.string().optional(),
+      })
+      .optional(),
+  )
+  .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
+    const targetMonthYear =
+      data?.month_year ||
+      data?.monthYear ||
+      `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
 
     // 1. Get profile & user metadata
     const { data: profile } = await supabase
@@ -248,10 +260,21 @@ export const getMySalaryOverview = createServerFn({ method: "GET" })
       .eq("id", userId)
       .maybeSingle();
 
-    // 2. Get salary structure
+    let userMeta: any = {};
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+      if (authUser?.user?.user_metadata) {
+        userMeta = authUser.user.user_metadata;
+      }
+    } catch (err) {
+      console.error("Failed to load user metadata for salary overview:", err);
+    }
+
+    // 2. Get salary structure from DB or local
     let salaryStructure: any = null;
     try {
-      const { data, error } = await supabase
+      const { data: sData, error } = await supabase
         .from("employee_salary_structures")
         .select("*")
         .eq("user_id", userId)
@@ -261,7 +284,7 @@ export const getMySalaryOverview = createServerFn({ method: "GET" })
         const res = await local.from("employee_salary_structures").select("*").eq("user_id", userId).maybeSingle();
         salaryStructure = res.data;
       } else {
-        salaryStructure = data;
+        salaryStructure = sData;
       }
     } catch {
       const local = createLocalSupabaseClient();
@@ -269,10 +292,82 @@ export const getMySalaryOverview = createServerFn({ method: "GET" })
       salaryStructure = res.data;
     }
 
+    // Determine the effective gross salary
+    const metaSalary = userMeta?.salary != null ? Number(userMeta.salary) : null;
+    const profileSalary = profile?.salary != null ? Number(profile.salary) : null;
+    
+    let gross = 50000;
+    if (metaSalary != null && !isNaN(metaSalary) && metaSalary > 0) {
+      gross = metaSalary;
+    } else if (salaryStructure?.monthly_gross != null && Number(salaryStructure.monthly_gross) > 0) {
+      gross = Number(salaryStructure.monthly_gross);
+    } else if (profileSalary != null && !isNaN(profileSalary) && profileSalary > 0) {
+      gross = profileSalary;
+    }
+
+    // If salaryStructure exists, scale or use its components; otherwise build standard structure
+    let activeStructure: SalaryStructure;
+    if (salaryStructure && Number(salaryStructure.monthly_gross) === gross) {
+      activeStructure = salaryStructure;
+    } else if (salaryStructure && Number(salaryStructure.monthly_gross) > 0) {
+      const ratio = gross / Number(salaryStructure.monthly_gross);
+      activeStructure = {
+        ...salaryStructure,
+        monthly_gross: gross,
+        basic_pay: Math.round(Number(salaryStructure.basic_pay || 0) * ratio),
+        hra: Math.round(Number(salaryStructure.hra || 0) * ratio),
+        conveyance: Math.round(Number(salaryStructure.conveyance || 0) * ratio),
+        special_allowance: Math.round(Number(salaryStructure.special_allowance || 0) * ratio),
+      };
+    } else {
+      const basic = Math.round(gross * 0.5);
+      const hra = Math.round(gross * 0.25);
+      const conveyance = Math.round(gross * 0.05);
+      const special = Math.max(0, gross - basic - hra - conveyance);
+      activeStructure = {
+        id: "default-struct",
+        user_id: userId,
+        monthly_gross: gross,
+        basic_pay: basic,
+        hra,
+        conveyance,
+        special_allowance: special,
+        pf_deduction: gross >= 15000 ? 1800 : Math.round(basic * 0.12),
+        pt_deduction: 200,
+        tds_deduction: 0,
+        other_deductions: 0,
+        custom_notes: "Standard Base Configuration",
+      };
+
+      // Auto-populate salary structure in background
+      try {
+        const structPayload = {
+          user_id: userId,
+          monthly_gross: gross,
+          basic_pay: basic,
+          hra,
+          conveyance,
+          special_allowance: special,
+          pf_deduction: activeStructure.pf_deduction,
+          pt_deduction: activeStructure.pt_deduction,
+          tds_deduction: 0,
+          other_deductions: 0,
+          updated_at: new Date().toISOString(),
+        };
+        const { error: sErr } = await supabase.from("employee_salary_structures").upsert(structPayload, { onConflict: "user_id" });
+        if (sErr) {
+          const local = createLocalSupabaseClient();
+          await local.from("employee_salary_structures").upsert(structPayload, { onConflict: "user_id" });
+        }
+      } catch {
+        // Ignore fallback
+      }
+    }
+
     // 3. Get all generated payslips for this employee
     let payslips: any[] = [];
     try {
-      const { data, error } = await supabase
+      const { data: pData, error } = await supabase
         .from("payslips")
         .select("*")
         .eq("user_id", userId)
@@ -282,7 +377,7 @@ export const getMySalaryOverview = createServerFn({ method: "GET" })
         const res = await local.from("payslips").select("*").eq("user_id", userId).order("month_year", { ascending: false });
         payslips = res.data || [];
       } else {
-        payslips = data || [];
+        payslips = pData || [];
       }
     } catch {
       const local = createLocalSupabaseClient();
@@ -290,26 +385,76 @@ export const getMySalaryOverview = createServerFn({ method: "GET" })
       payslips = res.data || [];
     }
 
-    // 4. Default fallback salary structure if none configured yet
-    const fallbackGross = profile?.salary ? Number(profile.salary) : 50000;
-    const activeStructure: SalaryStructure = salaryStructure || {
-      id: "default-struct",
-      user_id: userId,
-      monthly_gross: fallbackGross,
-      basic_pay: Math.round(fallbackGross * 0.5),
-      hra: Math.round(fallbackGross * 0.25),
-      conveyance: Math.round(fallbackGross * 0.05),
-      special_allowance: Math.round(fallbackGross * 0.2),
-      pf_deduction: 1800,
-      pt_deduction: 200,
-      tds_deduction: 0,
-      other_deductions: 0,
-      custom_notes: "Standard Base Configuration",
+    // 4. Calculate month payout breakdown
+    const existingPayslip = (payslips || []).find((p: any) => p.month_year === targetMonthYear);
+
+    const [yearStr, monthStr] = targetMonthYear.split("-");
+    const year = parseInt(yearStr || "2026", 10);
+    const month = parseInt(monthStr || "10", 10);
+    const totalDays = getDaysInMonth(year, month);
+
+    let lopDays = 0;
+    let lopDeduction = 0;
+    let grossEarnings = activeStructure.monthly_gross;
+    let pfDeduction = activeStructure.pf_deduction;
+    let ptDeduction = activeStructure.pt_deduction;
+    let tdsDeduction = activeStructure.tds_deduction;
+    let otherDeductions = activeStructure.other_deductions;
+    let totalDeductions = 0;
+    let netSalary = 0;
+    let paidDays = totalDays;
+
+    if (existingPayslip) {
+      lopDays = Number(existingPayslip.lop_days || 0);
+      lopDeduction = Number(existingPayslip.lop_deduction || 0);
+      grossEarnings = Number(existingPayslip.gross_earnings || activeStructure.monthly_gross);
+      pfDeduction = Number(existingPayslip.pf_deduction || 0);
+      ptDeduction = Number(existingPayslip.pt_deduction || 0);
+      tdsDeduction = Number(existingPayslip.tds_deduction || 0);
+      otherDeductions = Number(existingPayslip.other_deductions || 0);
+      totalDeductions = Number(existingPayslip.total_deductions || 0);
+      netSalary = Number(existingPayslip.net_salary || 0);
+      paidDays = Number(existingPayslip.paid_days || totalDays - lopDays);
+    } else {
+      const approvedLop = await calculateMonthLopDays(supabase, userId, targetMonthYear);
+      // Check if admin entered manual LOP in userMeta.lop (e.g. "02" or "2")
+      const metaLop = userMeta?.lop != null ? parseFloat(String(userMeta.lop).replace(/[^\d.]/g, "")) : 0;
+      lopDays = approvedLop > 0 ? approvedLop : (metaLop > 0 ? metaLop : 0);
+
+      const perDaySalary = activeStructure.monthly_gross / totalDays;
+      lopDeduction = Math.round(perDaySalary * lopDays * 100) / 100;
+      totalDeductions = Math.round((lopDeduction + pfDeduction + ptDeduction + tdsDeduction + otherDeductions) * 100) / 100;
+      netSalary = Math.max(0, grossEarnings - totalDeductions);
+      paidDays = Math.max(0, totalDays - lopDays);
+    }
+
+    const calculated = {
+      gross_earnings: grossEarnings,
+      basic_pay: activeStructure.basic_pay,
+      hra: activeStructure.hra,
+      special_allowance: activeStructure.special_allowance,
+      conveyance: activeStructure.conveyance,
+      pf_deduction: pfDeduction,
+      pt_deduction: ptDeduction,
+      tds_deduction: tdsDeduction,
+      other_deductions: otherDeductions,
+      total_deductions: totalDeductions,
+      lop_days: lopDays,
+      lop_deduction: lopDeduction,
+      total_days: totalDays,
+      paid_days: paidDays,
+      net_salary: netSalary,
     };
 
     return {
-      profile,
+      profile: {
+        ...(profile || {}),
+        ...userMeta,
+        salary: activeStructure.monthly_gross,
+      },
+      structure: activeStructure,
       salaryStructure: activeStructure,
+      calculated,
       payslips: (payslips || []) as Payslip[],
     };
   });
@@ -515,10 +660,33 @@ export const getAdminPayrollOverview = createServerFn({ method: "GET" })
 
     const result: AdminPayrollEmployeeItem[] = [];
 
+    // Load user metadata for fallback
+    const userMetaMap = new Map<string, any>();
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: userList } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+      (userList?.users ?? []).forEach((u: any) => {
+        if (u.user_metadata) {
+          userMetaMap.set(u.id, u.user_metadata);
+        }
+      });
+    } catch (e) {
+      console.error("Failed to load user metadata in getAdminPayrollOverview:", e);
+    }
+
     for (const p of profiles || []) {
       // Filter out admin users from payroll list if needed
       const struct = structMap.get(p.id) || null;
-      const monthlyGross = struct?.monthly_gross ?? (p.salary ? Number(p.salary) : 50000);
+      const meta = userMetaMap.get(p.id);
+      const metaSalary = meta?.salary != null ? Number(meta.salary) : null;
+      const monthlyGross =
+        struct?.monthly_gross != null && Number(struct.monthly_gross) > 0
+          ? Number(struct.monthly_gross)
+          : metaSalary != null && !isNaN(metaSalary) && metaSalary > 0
+            ? metaSalary
+            : p.salary
+              ? Number(p.salary)
+              : 50000;
       const existingPayslip = payslipMap.get(p.id) || null;
 
       // Calculate LOP days for this month

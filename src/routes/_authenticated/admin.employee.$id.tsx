@@ -274,6 +274,10 @@ function AdminEmployeeProfile() {
       toast.success("Employee profile saved");
       qc.invalidateQueries({ queryKey: ["employee-profile", id] });
       qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["admin-payroll-overview"] });
+      qc.invalidateQueries({ queryKey: ["my-salary-overview"] });
+      qc.invalidateQueries({ queryKey: ["my-profile"] });
+      qc.invalidateQueries({ queryKey: ["employee-all-data", id] });
     },
     onError: (e: Error) => toast.error(e.message),
   });

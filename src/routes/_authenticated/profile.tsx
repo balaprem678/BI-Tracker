@@ -904,7 +904,7 @@ function ProfilePage() {
                   </div>
                   <div className="text-2xl font-bold font-mono text-foreground mt-2">
                     {showSalary
-                      ? formatINR(salaryOverviewQuery.data?.calculated?.gross_earnings ?? salaryOverviewQuery.data?.structure?.monthly_gross ?? 0)
+                      ? formatINR(salaryOverviewQuery.data?.calculated?.gross_earnings ?? salaryOverviewQuery.data?.structure?.monthly_gross ?? (profile.data?.salary ? Number(profile.data.salary) : 0))
                       : "●●●●●"}
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-1">
@@ -920,7 +920,7 @@ function ProfilePage() {
                   </div>
                   <div className="text-2xl font-bold font-mono text-rose-600 dark:text-rose-400 mt-2">
                     {showSalary
-                      ? formatINR(salaryOverviewQuery.data?.calculated?.total_deductions ?? 0)
+                      ? formatINR(salaryOverviewQuery.data?.calculated?.total_deductions ?? (profile.data?.salary ? (Math.min(1800, Math.round(Number(profile.data.salary) * 0.5 * 0.12)) + 200) : 0))
                       : "●●●●●"}
                   </div>
                   <div className="flex flex-wrap gap-1 mt-1 text-[10px]">
@@ -928,10 +928,10 @@ function ProfilePage() {
                       LOP: {salaryOverviewQuery.data?.calculated?.lop_days ?? 0}d
                     </span>
                     <span className="bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                      PF: {showSalary ? formatINR(salaryOverviewQuery.data?.calculated?.pf_deduction ?? 0) : "••"}
+                      PF: {showSalary ? formatINR(salaryOverviewQuery.data?.calculated?.pf_deduction ?? (profile.data?.salary ? Math.min(1800, Math.round(Number(profile.data.salary) * 0.5 * 0.12)) : 0)) : "••"}
                     </span>
                     <span className="bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                      PT: {showSalary ? formatINR(salaryOverviewQuery.data?.calculated?.pt_deduction ?? 0) : "••"}
+                      PT: {showSalary ? formatINR(salaryOverviewQuery.data?.calculated?.pt_deduction ?? (profile.data?.salary ? 200 : 0)) : "••"}
                     </span>
                   </div>
                 </div>
@@ -944,7 +944,7 @@ function ProfilePage() {
                   </div>
                   <div className="text-2xl font-black font-mono text-primary mt-2">
                     {showSalary
-                      ? formatINR(salaryOverviewQuery.data?.calculated?.net_salary ?? 0)
+                      ? formatINR(salaryOverviewQuery.data?.calculated?.net_salary ?? (profile.data?.salary ? Math.max(0, Number(profile.data.salary) - (Math.min(1800, Math.round(Number(profile.data.salary) * 0.5 * 0.12)) + 200)) : 0))
                       : "●●●●●"}
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-1">
@@ -960,7 +960,7 @@ function ProfilePage() {
                   </div>
                   <div className="flex items-baseline gap-1 mt-2">
                     <span className="text-2xl font-bold text-foreground">
-                      {salaryOverviewQuery.data?.calculated?.paid_days ?? 0}
+                      {salaryOverviewQuery.data?.calculated?.paid_days ?? 30}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       / {salaryOverviewQuery.data?.calculated?.total_days ?? 30} Paid Days
@@ -986,7 +986,7 @@ function ProfilePage() {
                         <span className="text-muted-foreground">Basic Pay</span>
                         <span className="font-mono font-medium">
                           {showSalary
-                            ? formatINR(salaryOverviewQuery.data?.calculated?.basic_pay ?? salaryOverviewQuery.data?.structure?.basic_pay ?? 0)
+                            ? formatINR(salaryOverviewQuery.data?.calculated?.basic_pay ?? salaryOverviewQuery.data?.structure?.basic_pay ?? (profile.data?.salary ? Math.round(Number(profile.data.salary) * 0.5) : 0))
                             : "●●●●●"}
                         </span>
                       </div>
@@ -994,7 +994,7 @@ function ProfilePage() {
                         <span className="text-muted-foreground">House Rent Allowance (HRA)</span>
                         <span className="font-mono font-medium">
                           {showSalary
-                            ? formatINR(salaryOverviewQuery.data?.calculated?.hra ?? salaryOverviewQuery.data?.structure?.hra ?? 0)
+                            ? formatINR(salaryOverviewQuery.data?.calculated?.hra ?? salaryOverviewQuery.data?.structure?.hra ?? (profile.data?.salary ? Math.round(Number(profile.data.salary) * 0.25) : 0))
                             : "●●●●●"}
                         </span>
                       </div>
@@ -1002,7 +1002,7 @@ function ProfilePage() {
                         <span className="text-muted-foreground">Special Allowance</span>
                         <span className="font-mono font-medium">
                           {showSalary
-                            ? formatINR(salaryOverviewQuery.data?.calculated?.special_allowance ?? salaryOverviewQuery.data?.structure?.special_allowance ?? 0)
+                            ? formatINR(salaryOverviewQuery.data?.calculated?.special_allowance ?? salaryOverviewQuery.data?.structure?.special_allowance ?? (profile.data?.salary ? Math.round(Number(profile.data.salary) * 0.2) : 0))
                             : "●●●●●"}
                         </span>
                       </div>
@@ -1010,7 +1010,7 @@ function ProfilePage() {
                         <span className="text-muted-foreground">Conveyance Allowance</span>
                         <span className="font-mono font-medium">
                           {showSalary
-                            ? formatINR(salaryOverviewQuery.data?.calculated?.conveyance ?? salaryOverviewQuery.data?.structure?.conveyance ?? 0)
+                            ? formatINR(salaryOverviewQuery.data?.calculated?.conveyance ?? salaryOverviewQuery.data?.structure?.conveyance ?? (profile.data?.salary ? Math.round(Number(profile.data.salary) * 0.05) : 0))
                             : "●●●●●"}
                         </span>
                       </div>
@@ -1019,7 +1019,7 @@ function ProfilePage() {
                       <span>Gross Earnings</span>
                       <span className="font-mono text-foreground">
                         {showSalary
-                          ? formatINR(salaryOverviewQuery.data?.calculated?.gross_earnings ?? salaryOverviewQuery.data?.structure?.monthly_gross ?? 0)
+                          ? formatINR(salaryOverviewQuery.data?.calculated?.gross_earnings ?? salaryOverviewQuery.data?.structure?.monthly_gross ?? (profile.data?.salary ? Number(profile.data.salary) : 0))
                           : "●●●●●"}
                       </span>
                     </div>
@@ -1051,7 +1051,7 @@ function ProfilePage() {
                         <span className="text-muted-foreground">Provident Fund (Employee PF)</span>
                         <span className="font-mono font-medium text-rose-600/90 dark:text-rose-400/90">
                           {showSalary
-                            ? `- ${formatINR(salaryOverviewQuery.data?.calculated?.pf_deduction ?? salaryOverviewQuery.data?.structure?.pf_deduction ?? 0)}`
+                            ? `- ${formatINR(salaryOverviewQuery.data?.calculated?.pf_deduction ?? salaryOverviewQuery.data?.structure?.pf_deduction ?? (profile.data?.salary ? Math.min(1800, Math.round(Number(profile.data.salary) * 0.5 * 0.12)) : 0))}`
                             : "●●●●●"}
                         </span>
                       </div>
@@ -1059,7 +1059,7 @@ function ProfilePage() {
                         <span className="text-muted-foreground">Professional Tax (PT)</span>
                         <span className="font-mono font-medium text-rose-600/90 dark:text-rose-400/90">
                           {showSalary
-                            ? `- ${formatINR(salaryOverviewQuery.data?.calculated?.pt_deduction ?? salaryOverviewQuery.data?.structure?.pt_deduction ?? 0)}`
+                            ? `- ${formatINR(salaryOverviewQuery.data?.calculated?.pt_deduction ?? salaryOverviewQuery.data?.structure?.pt_deduction ?? (profile.data?.salary ? 200 : 0))}`
                             : "●●●●●"}
                         </span>
                       </div>
@@ -1076,7 +1076,7 @@ function ProfilePage() {
                       <span>Total Deductions</span>
                       <span className="font-mono text-rose-600 dark:text-rose-400">
                         {showSalary
-                          ? `- ${formatINR(salaryOverviewQuery.data?.calculated?.total_deductions ?? 0)}`
+                          ? `- ${formatINR(salaryOverviewQuery.data?.calculated?.total_deductions ?? (profile.data?.salary ? (Math.min(1800, Math.round(Number(profile.data.salary) * 0.5 * 0.12)) + 200) : 0))}`
                           : "●●●●●"}
                       </span>
                     </div>

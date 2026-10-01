@@ -45,6 +45,7 @@ import {
   type TeamHourlyReportRow,
   type TeamMember,
 } from "@/lib/team.functions";
+import { formatHours } from "@/lib/time-utils";
 
 export const Route = createFileRoute("/_authenticated/team")({
   head: () => ({
@@ -318,7 +319,7 @@ function TeamPage() {
                 <span className="ml-1 text-base font-normal text-muted-foreground">/ {totalMembers}</span>
               </p>
             </div>
-            <Stat label="Today's team hours" value={totalWorkedToday.toFixed(1)} suffix="h" />
+            <Stat label="Today's team hours" value={formatHours(totalWorkedToday)} />
             <Stat label="Departments" value={departments.length || 1} />
           </div>
 
@@ -609,7 +610,7 @@ function TeamPage() {
               label="Active contributors"
               value={(report ?? []).filter((r) => r.hoursWorked > 0 || r.loggedHours > 0).length}
             />
-            <Stat label="Total hours in range" value={reportTotalHours.toFixed(2)} suffix="h" />
+            <Stat label="Total hours in range" value={formatHours(reportTotalHours)} />
             <Stat label="Hourly tasks logged" value={reportTotalLogged} />
             <Stat label="Total Labour Cost" value={`$${reportTotalCost.toFixed(2)}`} />
           </div>
@@ -712,7 +713,7 @@ function TeamPage() {
 
                       <div className="ml-auto flex items-center gap-4 text-xs">
                         <span className="stat-number rounded-md bg-primary/10 px-2.5 py-1 font-semibold text-primary">
-                          {r.hoursWorked.toFixed(2)}h clocked
+                          {formatHours(r.hoursWorked)} clocked
                         </span>
                         <span className="stat-number text-muted-foreground">
                           {r.loggedHours} tasks logged
@@ -770,7 +771,7 @@ function TeamPage() {
                                   )}
                                 </div>
                                 <span className="stat-number ml-auto font-semibold text-primary">
-                                  {s.clockOut ? `${s.hours.toFixed(2)} h` : "in progress"}
+                                  {s.clockOut ? formatHours(s.hours) : "in progress"}
                                 </span>
                               </li>
                             ))}
@@ -997,7 +998,7 @@ function EmployeeCard({
           <div>
             <span className="text-muted-foreground">Today: </span>
             <span className="stat-number font-semibold text-foreground">
-              {member.todayHoursWorked.toFixed(1)}h
+              {formatHours(member.todayHoursWorked)}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -1169,8 +1170,7 @@ function EmployeeAllDataModal({
                     Total Shift Hours
                   </p>
                   <p className="stat-number mt-1 text-xl font-bold text-foreground">
-                    {data.stats.totalClockedHours.toFixed(1)}
-                    <span className="ml-0.5 text-xs text-muted-foreground font-normal">h</span>
+                    {formatHours(data.stats.totalClockedHours)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-3">
@@ -1268,7 +1268,7 @@ function EmployeeAllDataModal({
                           >
                             <FolderKanban className="size-3.5 text-primary" />
                             <span className="font-medium text-foreground">{p.project}</span>
-                            <span className="stat-number font-semibold text-primary">{p.hours}h</span>
+                            <span className="stat-number font-semibold text-primary">{formatHours(p.hours)}</span>
                             <span className="text-muted-foreground">({p.taskCount} tasks)</span>
                           </div>
                         ))}
@@ -1438,7 +1438,7 @@ function EmployeeAllDataModal({
                                   </div>
                                 </td>
                                 <td className="stat-number px-4 py-3 font-semibold text-primary">
-                                  {s.hours.toFixed(2)}h
+                                  {formatHours(s.hours)}
                                 </td>
                                 <td className="px-4 py-3 text-muted-foreground">
                                   {s.note || "—"}

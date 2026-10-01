@@ -22,6 +22,7 @@ import {
 } from "@/lib/admin.functions";
 import { getMyProjects, type Project } from "@/lib/project.functions";
 import { ProjectEditModal, ProjectDeleteModal } from "@/components/project-edit-modal";
+import { formatHours } from "@/lib/time-utils";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
@@ -510,7 +511,7 @@ function AdminPanel() {
                           <span className="font-semibold text-[11px]">{p.progress_percent || 0}%</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3.5 font-mono">{p.logged_hours || 0} hrs</td>
+                      <td className="px-4 py-3.5 font-mono">{formatHours(p.logged_hours)}</td>
                       <td className="px-4 py-3.5 text-right whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">
                           <button

@@ -18,6 +18,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { AppShell, Panel, Stat } from "@/components/app-shell";
+import { formatHours, formatDurationSeconds } from "@/lib/time-utils";
 import { getCurrentLocation } from "@/lib/location";
 import {
   clockIn,
@@ -360,19 +361,16 @@ function Dashboard() {
       {/* KPI Stats Cards — Showing Counts and Hours Only */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <Stat
-          label="Shift Hours (Today)"
-          value={shiftAnalytics?.todayShiftHours ?? 0.0}
-          suffix="h"
+          label="Shift Time (Today)"
+          value={formatHours(shiftAnalytics?.todayShiftHours)}
         />
         <Stat
-          label="Project Hours (Today)"
-          value={formatHoursDecimal(totalSecondsToday)}
-          suffix="h"
+          label="Project Time (Today)"
+          value={formatDurationSeconds(totalSecondsToday)}
         />
         <Stat
           label="Meetings & General"
-          value={shiftAnalytics?.unallocatedHours ?? 0.0}
-          suffix="h"
+          value={formatHours(shiftAnalytics?.unallocatedHours)}
         />
         <Stat
           label="Active Projects"
@@ -477,7 +475,7 @@ function Dashboard() {
                         <td className="py-3.5 font-mono font-bold text-foreground">
                           {formatSeconds(liveSec)}{" "}
                           <span className="text-xs font-normal text-muted-foreground">
-                            ({formatHoursDecimal(liveSec)}h)
+                            ({formatDurationSeconds(liveSec)})
                           </span>
                         </td>
                         <td className="py-3.5">

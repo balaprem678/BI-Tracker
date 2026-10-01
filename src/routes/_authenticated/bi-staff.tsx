@@ -47,6 +47,7 @@ import {
   type TeamHourlyReportRow,
   type TeamMember,
 } from "@/lib/team.functions";
+import { formatHours } from "@/lib/time-utils";
 
 export const Route = createFileRoute("/_authenticated/bi-staff")({
   head: () => ({
@@ -320,7 +321,7 @@ function BiStaffPage() {
                 <span className="ml-1 text-base font-normal text-muted-foreground">/ {totalMembers}</span>
               </p>
             </div>
-            <Stat label="Today's staff hours" value={totalWorkedToday.toFixed(1)} suffix="h" />
+            <Stat label="Today's staff hours" value={formatHours(totalWorkedToday)} />
             <Stat label="Departments" value={departments.length || 1} />
           </div>
 
@@ -531,11 +532,9 @@ function BiStaffPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs font-semibold">
-                        {m.todayHoursWorked > 0 ? (
-                          <span className="text-foreground">{m.todayHoursWorked.toFixed(2)}h</span>
-                        ) : (
-                          <span className="text-muted-foreground">0.00h</span>
-                        )}
+                        <span className={m.todayHoursWorked > 0 ? "text-foreground" : "text-muted-foreground"}>
+                          {formatHours(m.todayHoursWorked)}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <button
@@ -614,7 +613,7 @@ function BiStaffPage() {
                       </div>
                       <div className="rounded-md bg-muted/40 p-2">
                         <p className="text-muted-foreground">Today's Hours</p>
-                        <p className="font-mono font-medium">{m.todayHoursWorked.toFixed(2)}h</p>
+                        <p className="font-mono font-medium">{formatHours(m.todayHoursWorked)}</p>
                       </div>
                     </div>
 
@@ -727,7 +726,7 @@ function BiStaffPage() {
 
           {/* Report KPI Stats */}
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Stat label="Total Worked Hours" value={reportTotalHours.toFixed(2)} suffix="h" />
+            <Stat label="Total Worked Hours" value={formatHours(reportTotalHours)} />
             <Stat label="Total Hourly Logs" value={reportTotalLogged} />
             <Stat label="Total Labor Cost" value={`$${reportTotalCost.toFixed(2)}`} />
           </div>
@@ -777,7 +776,7 @@ function BiStaffPage() {
                         {r.department || "General"}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs font-semibold text-foreground">
-                        {r.hoursWorked.toFixed(2)}h
+                        {formatHours(r.hoursWorked)}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                         {r.loggedHours} logs
@@ -1024,7 +1023,7 @@ function EmployeeDetailsModal({
                       <span className="text-xs font-medium">Clocked Hours</span>
                       <Clock className="size-4 text-primary" />
                     </div>
-                    <p className="text-2xl font-bold font-mono text-foreground">{stats.totalClockedHours.toFixed(1)}h</p>
+                    <p className="text-2xl font-bold font-mono text-foreground">{formatHours(stats.totalClockedHours)}</p>
                     <p className="text-[11px] text-muted-foreground mt-1">Across all recorded shifts</p>
                   </div>
 
@@ -1182,7 +1181,7 @@ function EmployeeDetailsModal({
                               : "Active Now"}
                           </p>
                           <span className="rounded-md bg-primary/10 border border-primary/20 px-2.5 py-1 font-mono font-bold text-primary text-xs">
-                            {s.hours.toFixed(2)}h
+                            {formatHours(s.hours)}
                           </span>
                         </div>
                       </div>

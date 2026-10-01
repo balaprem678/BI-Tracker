@@ -24,6 +24,7 @@ import { AppShell, Panel, Stat } from "@/components/app-shell";
 import { ProjectEditModal, ProjectDeleteModal } from "@/components/project-edit-modal";
 import { ProjectWorkstation } from "@/components/project-workstation";
 import { toast } from "sonner";
+import { formatHours, formatDurationSeconds } from "@/lib/time-utils";
 import { getSessionInfo } from "@/lib/tracker.functions";
 import { listEmployees } from "@/lib/admin.functions";
 import {
@@ -498,7 +499,7 @@ function ProjectPage() {
                       </div>
                       <div>
                         <span className="text-muted-foreground block">Logged Hours</span>
-                        <span className="font-medium text-foreground">{project.logged_hours || 0} hrs</span>
+                        <span className="font-medium text-foreground">{formatHours(project.logged_hours)}</span>
                       </div>
                       <div>
                         <span className="text-muted-foreground block">Priority</span>
@@ -659,7 +660,7 @@ function ProjectPage() {
                           )}
                         </td>
                         <td className="px-4 py-3.5 font-mono text-[11px]">{project.deadline ? project.deadline.slice(0, 10) : "—"}</td>
-                        <td className="px-4 py-3.5 font-mono">{project.logged_hours || 0} hrs</td>
+                        <td className="px-4 py-3.5 font-mono">{formatHours(project.logged_hours)}</td>
                         <td className="px-4 py-3.5 font-semibold">{project.priority}</td>
                         <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
                           {isPrivileged && (
@@ -776,7 +777,7 @@ function ProjectPage() {
                     </div>
                     <div>
                       <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Logged Hours</span>
-                      <span className="font-mono font-semibold text-foreground">{proj.logged_hours || 0} hrs</span>
+                      <span className="font-mono font-semibold text-foreground">{formatHours(proj.logged_hours)}</span>
                     </div>
                   </div>
 
@@ -863,7 +864,7 @@ function ProjectPage() {
                       </td>
                       <td className="px-4 py-3.5">{proj.assigned_employees?.length || 0} members</td>
                       <td className="px-4 py-3.5 font-bold text-primary">{proj.progress_percent || 0}%</td>
-                      <td className="px-4 py-3.5 font-mono">{proj.logged_hours || 0} hrs</td>
+                      <td className="px-4 py-3.5 font-mono">{formatHours(proj.logged_hours)}</td>
                       <td className="px-4 py-3.5">
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">
                           {proj.status}
@@ -909,7 +910,7 @@ function ProjectPage() {
             </div>
           </Panel>
 
-          <Panel title="Logged Hours Summary" hint={`Total logged hours: ${reportData?.totalHours || 0} hrs`}>
+          <Panel title="Logged Hours Summary" hint={`Total logged time: ${formatHours(reportData?.totalHours)}`}>
             <div className="p-4 text-xs text-muted-foreground">
               Project hourly analytics consolidated from live work sessions.
             </div>
@@ -1293,7 +1294,7 @@ function ProjectPage() {
                     <div key={s.id} className="rounded-lg border border-border p-3 text-xs space-y-1">
                       <div className="flex justify-between font-semibold">
                         <span>{s.session_date}</span>
-                        <span className="font-mono text-primary">{formatSeconds(s.duration_seconds)}</span>
+                        <span className="font-mono text-primary">{formatDurationSeconds(s.duration_seconds)}</span>
                       </div>
                       <p className="text-muted-foreground">{s.task_summary || "Session in progress or completed."}</p>
                     </div>

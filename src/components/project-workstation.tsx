@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Panel } from "@/components/app-shell";
 import { toast } from "sonner";
+import { formatDurationSeconds } from "@/lib/time-utils";
 import {
   getMyProjects,
   getMyProjectSessions,
@@ -340,7 +341,7 @@ export function ProjectWorkstation({
                       {formatSeconds(state.currentSeconds)}
                     </div>
                     <div className="text-[11px] text-muted-foreground">
-                      ({formatHoursDecimal(state.currentSeconds)} hours)
+                      ({formatDurationSeconds(state.currentSeconds)})
                     </div>
                   </div>
 
@@ -493,7 +494,7 @@ export function ProjectWorkstation({
                         <td className="py-3.5 font-mono font-bold text-foreground">
                           {formatSeconds(liveSec)}{" "}
                           <span className="text-xs font-normal text-muted-foreground">
-                            ({formatHoursDecimal(liveSec)}h)
+                            ({formatDurationSeconds(liveSec)})
                           </span>
                         </td>
                         <td className="py-3.5">

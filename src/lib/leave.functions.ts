@@ -75,16 +75,16 @@ export function formatSlotDuration(fromTime: string, toTime: string): string {
   const start = timeToMinutes(fromTime);
   const end = timeToMinutes(toTime);
   const diff = end - start;
-  if (diff <= 0) return "0 mins";
+  if (diff <= 0) return "0m";
   const hrs = Math.floor(diff / 60);
   const mins = diff % 60;
   if (hrs > 0 && mins > 0) {
-    return `${hrs} hr${hrs > 1 ? "s" : ""} ${mins} min${mins > 1 ? "s" : ""}`;
+    return `${hrs}h ${mins}m`;
   }
   if (hrs > 0) {
-    return `${hrs} hr${hrs > 1 ? "s" : ""}`;
+    return `${hrs}h`;
   }
-  return `${mins} min${mins > 1 ? "s" : ""}`;
+  return `${mins}m`;
 }
 
 export function parseLeaveTimeSlot(reason?: string | null, rawTimeSlot?: string | null) {

@@ -16,6 +16,14 @@ const supabaseKey =
   import.meta.env?.["SUPABASE_PUBLISHABLE_KEY"];
 
 function createSupabaseClient() {
+  const isLocalhost =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+
+  if (isLocalhost) {
+    return createLocalSupabaseClient();
+  }
+
   if (supabaseUrl && supabaseKey && !supabaseUrl.includes("placeholder")) {
     return createClient(supabaseUrl, supabaseKey);
   }

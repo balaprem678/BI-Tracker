@@ -84,7 +84,7 @@ export function AppShell({
 
   // Supabase real-time subscription for immediate sub-second deactivation detection
   useEffect(() => {
-    if (!session?.userId) return;
+    if (!session?.userId || typeof supabase.channel !== "function") return;
 
     const channel = supabase
       .channel(`profile-status-${session.userId}`)
@@ -603,7 +603,7 @@ export function Stat({
   breakdown?: React.ReactNode;
 }) {
   return (
-    <div className="panel p-5 shadow-[0_12px_28px_rgba(15,23,42,0.06)] transition-transform duration-200 hover:-translate-y-0.5">
+    <div className="panel p-4 shadow-[0_12px_28px_rgba(15,23,42,0.06)] transition-transform duration-200 hover:-translate-y-0.5">
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         {label}
       </p>

@@ -157,6 +157,7 @@ export const createEmployee = createServerFn({ method: "POST" })
         department: data.department || null,
         staff_section: data.staffSection,
         hourly_rate: data.hourlyRate,
+        role: data.role,
       },
     });
     if (error || !created.user) {
@@ -164,26 +165,30 @@ export const createEmployee = createServerFn({ method: "POST" })
     }
 
     const userId = created.user.id;
-    await supabaseAdmin
+    const { error: profileError } = await supabaseAdmin
       .from("profiles")
-      .update({
+      .upsert({
+        id: userId,
         full_name: data.fullName,
         job_title: data.jobTitle || null,
         department: data.department || null,
         staff_section: data.staffSection,
         hourly_rate: data.hourlyRate,
         email: data.email,
-      })
-      .eq("id", userId);
-
-    if (data.role === "admin" || data.role === "sub_admin") {
-      await supabaseAdmin.from("user_roles").upsert(
-        { user_id: userId, role: data.role },
-        { onConflict: "user_id,role" },
-      );
+      }, { onConflict: "id" });
+    if (profileError) {
+      throw new Error(`Account created, but its profile could not be saved: ${profileError.message}`);
     }
 
-    return { ok: true as const, message: `${data.fullName} can now sign in.` };
+    const { error: roleError } = await supabaseAdmin.from("user_roles").upsert(
+      { user_id: userId, role: data.role },
+      { onConflict: "user_id,role" },
+    );
+    if (roleError) {
+      throw new Error(`Account created, but its access role could not be saved: ${roleError.message}`);
+    }
+
+    return { ok: true as const, userId, message: `${data.fullName} can now sign in.` };
   });
 
 export const setEmployeeActive = createServerFn({ method: "POST" })

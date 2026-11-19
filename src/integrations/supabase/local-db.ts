@@ -797,6 +797,30 @@ class LocalDatabaseManager {
 
 export const localDbManager = new LocalDatabaseManager();
 
+export function syncLocalUser(user: LocalUser) {
+  const db = localDbManager.getDb();
+  const userIndex = db.users.findIndex((entry) => entry.id === user.id);
+  if (userIndex >= 0) {
+    db.users[userIndex] = user;
+  } else {
+    db.users.push(user);
+  }
+
+  const roleEntry = db.user_roles.find((entry) => entry.user_id === user.id);
+  if (roleEntry) {
+    roleEntry.role = user.role;
+  } else {
+    db.user_roles.push({
+      id: `role-${user.id}`,
+      user_id: user.id,
+      role: user.role,
+      created_at: user.createdAt,
+    });
+  }
+
+  localDbManager.saveDb(db);
+}
+
 function base64UrlEncode(str: string): string {
   if (typeof window !== "undefined") {
     return btoa(unescape(encodeURIComponent(str)))

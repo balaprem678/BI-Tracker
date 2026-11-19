@@ -20,6 +20,7 @@ import {
   listEmployees,
   setEmployeeActive,
 } from "@/lib/admin.functions";
+import { syncLocalUser } from "@/integrations/supabase/local-db";
 import { getMyProjects, type Project } from "@/lib/project.functions";
 import { ProjectEditModal, ProjectDeleteModal } from "@/components/project-edit-modal";
 import { formatHours } from "@/lib/time-utils";
@@ -122,6 +123,26 @@ function AdminPanel() {
         toast.error(res.message);
         return;
       }
+
+      if (
+        typeof window !== "undefined" &&
+        (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+      ) {
+        syncLocalUser({
+          id: res.userId,
+          employeeId: form.employeeId.trim() || null,
+          email: form.email.trim().toLowerCase(),
+          password: form.password,
+          fullName: form.fullName.trim(),
+          jobTitle: form.jobTitle.trim() || null,
+          department: form.department.trim() || null,
+          hourlyRate: Number(form.hourlyRate) || 0,
+          role: form.role,
+          isActive: true,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
       toast.success(res.message);
       setForm({
         ...form,
@@ -137,7 +158,8 @@ function AdminPanel() {
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["team-members"] });
     },
-    onError: () => toast.error("Could not create that account."),
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Could not create that account."),
   });
 
   const activeMutation = useMutation({
@@ -282,6 +304,7 @@ function AdminPanel() {
             />
             <Field
               label="Temporary password (min 8 characters)"
+              minLength={8}
               value={form.password}
               onChange={(v) => setForm({ ...form, password: v })}
             />
@@ -563,6 +586,7 @@ function Field({
   onChange,
   type = "text",
   required = true,
+  minLength,
   placeholder,
   id,
 }: {
@@ -571,6 +595,7 @@ function Field({
   onChange: (v: string) => void;
   type?: string;
   required?: boolean;
+  minLength?: number;
   placeholder?: string;
   id?: string;
 }) {
@@ -581,6 +606,7 @@ function Field({
         id={id}
         type={type}
         required={required}
+        minLength={minLength}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}

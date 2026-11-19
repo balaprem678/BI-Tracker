@@ -282,7 +282,6 @@ function AdminPanel() {
             />
             <Field
               label="Temporary password (min 8 characters)"
-              type="password"
               value={form.password}
               onChange={(v) => setForm({ ...form, password: v })}
             />

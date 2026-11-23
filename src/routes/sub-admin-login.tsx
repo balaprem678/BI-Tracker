@@ -67,12 +67,23 @@ function SubAdminLoginPage() {
         return;
       }
 
+      if (data.session?.access_token && typeof document !== "undefined") {
+        document.cookie = `sb-access-token=${encodeURIComponent(data.session.access_token)}; path=/; max-age=604800; SameSite=Lax`;
+      }
+
       toast.success(`Signed in as ${data.user?.user_metadata?.full_name || loginEmail}`);
 
-      const userRole = (data.session as any)?.user?.role || "sub_admin";
-      if (userRole === "admin") {
+      const { data: roleRow } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id);
+
+      const hasAdminRole = (roleRow ?? []).some((r: any) => r.role === "admin");
+      const hasSubAdminRole = (roleRow ?? []).some((r: any) => r.role === "sub_admin");
+
+      if (hasAdminRole) {
         navigate({ to: "/admin", replace: true });
-      } else if (userRole === "sub_admin") {
+      } else if (hasSubAdminRole) {
         navigate({ to: "/project", replace: true });
       } else {
         navigate({ to: "/dashboard", replace: true });

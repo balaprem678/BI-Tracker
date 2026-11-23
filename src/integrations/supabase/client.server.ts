@@ -18,10 +18,6 @@ const supabaseSecretKey =
   import.meta.env?.["SUPABASE_PUBLISHABLE_KEY"];
 
 function createSupabaseAdminClient() {
-  if (process.env["NODE_ENV"] === "development") {
-    return createLocalSupabaseClient();
-  }
-
   if (supabaseUrl && supabaseSecretKey && !supabaseUrl.includes("placeholder")) {
     return createClient(supabaseUrl, supabaseSecretKey, {
       auth: {

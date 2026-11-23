@@ -12,14 +12,24 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
     let claims: any = null;
 
     const authHeader = request?.headers?.get('authorization');
+    let token: string | null = null;
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.replace('Bearer ', '').trim();
-      if (token) {
-        const parsed = parseLocalJwt(token);
-        if (parsed && parsed.sub) {
-          userId = parsed.sub;
-          claims = parsed;
+      token = authHeader.replace('Bearer ', '').trim();
+    } else {
+      const cookieHeader = request?.headers?.get('cookie');
+      if (cookieHeader) {
+        const match = cookieHeader.match(/sb-access-token=([^;]+)/);
+        if (match && match[1]) {
+          token = decodeURIComponent(match[1].trim());
         }
+      }
+    }
+
+    if (token) {
+      const parsed = parseLocalJwt(token);
+      if (parsed && parsed.sub) {
+        userId = parsed.sub;
+        claims = parsed;
       }
     }
 

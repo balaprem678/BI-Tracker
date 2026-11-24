@@ -130,15 +130,21 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
-    if (window.location.hostname !== "127.0.0.1") return;
+    // Sync cookie immediately with current session for server functions
+    supabase.auth.getSession().then(({ data }: any) => {
+      if (typeof document !== "undefined" && data?.session?.access_token) {
+        document.cookie = `sb-access-token=${encodeURIComponent(data.session.access_token)}; path=/; max-age=604800; SameSite=Lax`;
+      }
+    });
 
-    const canonicalUrl = new URL(window.location.href);
-    canonicalUrl.hostname = "localhost";
-    window.location.replace(canonicalUrl.toString());
-  }, []);
-
-  useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((event: string) => {
+    const { data } = supabase.auth.onAuthStateChange((event: string, session: any) => {
+      if (typeof document !== "undefined") {
+        if (session?.access_token) {
+          document.cookie = `sb-access-token=${encodeURIComponent(session.access_token)}; path=/; max-age=604800; SameSite=Lax`;
+        } else if (event === "SIGNED_OUT") {
+          document.cookie = `sb-access-token=; path=/; max-age=0; SameSite=Lax`;
+        }
+      }
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
       router.invalidate();
       if (event !== "SIGNED_OUT") queryClient.invalidateQueries();

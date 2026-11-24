@@ -30,6 +30,20 @@ export const Route = createFileRoute("/_authenticated")({
       });
     }
 
+    if (location.pathname.startsWith("/admin")) {
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id);
+
+      const isDefaultAdmin = data.user.email?.toLowerCase() === "biadmin@bi-tracker.local";
+      const isAdmin = (roleData ?? []).some((r: any) => r.role === "admin") || isDefaultAdmin;
+
+      if (!isAdmin) {
+        throw redirect({ to: "/dashboard" });
+      }
+    }
+
     return { user: data.user };
   },
   component: () => <Outlet />,

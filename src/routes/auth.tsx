@@ -15,6 +15,7 @@ import {
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  DEFAULT_ADMIN_EMAIL,
   DEFAULT_ADMIN_PASSWORD,
   normalizeAdminIdentifier,
   resolveLocalLoginUser,
@@ -122,11 +123,26 @@ function AuthPage() {
         return;
       }
 
+      if (data.session?.access_token && typeof document !== "undefined") {
+        document.cookie = `sb-access-token=${encodeURIComponent(data.session.access_token)}; path=/; max-age=604800; SameSite=Lax`;
+      }
+
       toast.success(`Signed in as ${profile?.full_name || data.user?.user_metadata?.full_name || loginEmail}`);
 
-      const userRole = (data.session as any)?.user?.role || "employee";
-      if (userRole === "admin") {
+      // Query assigned role from user_roles table
+      const { data: roleRow } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id);
+
+      const hasAdminRole = (roleRow ?? []).some((r: any) => r.role === "admin");
+      const hasSubAdminRole = (roleRow ?? []).some((r: any) => r.role === "sub_admin");
+      const isDefaultAdmin = loginEmail.trim().toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase();
+
+      if (hasAdminRole || isDefaultAdmin) {
         navigate({ to: "/admin", replace: true });
+      } else if (hasSubAdminRole) {
+        navigate({ to: "/project", replace: true });
       } else {
         navigate({ to: "/dashboard", replace: true });
       }

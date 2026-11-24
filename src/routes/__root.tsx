@@ -130,6 +130,14 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
+    if (window.location.hostname !== "127.0.0.1") return;
+
+    const canonicalUrl = new URL(window.location.href);
+    canonicalUrl.hostname = "localhost";
+    window.location.replace(canonicalUrl.toString());
+  }, []);
+
+  useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event: string) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
       router.invalidate();

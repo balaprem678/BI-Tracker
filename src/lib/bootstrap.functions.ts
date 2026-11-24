@@ -15,6 +15,40 @@ export function normalizeAdminIdentifier(identifier: string) {
   return value;
 }
 
+const localLoginInput = z.object({
+  email: z.string().trim().email().max(255),
+  password: z.string().min(1).max(72),
+});
+
+export const resolveLocalLoginUser = createServerFn({ method: "POST" })
+  .inputValidator((input: z.input<typeof localLoginInput>) => localLoginInput.parse(input))
+  .handler(async ({ data }) => {
+    if (typeof process === "undefined" || process.env["NODE_ENV"] !== "development") {
+      return null;
+    }
+
+    const { localDbManager } = await import("@/integrations/supabase/local-db");
+    const user = localDbManager
+      .getDb()
+      .users.find((candidate) => candidate.email.toLowerCase() === data.email.toLowerCase());
+
+    if (!user || !user.isActive || user.password !== data.password) return null;
+
+    return {
+      id: user.id,
+      employeeId: user.employeeId ?? null,
+      email: user.email,
+      username: user.username,
+      fullName: user.fullName,
+      jobTitle: user.jobTitle ?? null,
+      department: user.department ?? null,
+      hourlyRate: user.hourlyRate,
+      role: user.role,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+    };
+  });
+
 /**
  * Bootstrap-only: allows creating the very first administrator account.
  * Once any admin exists this endpoint refuses — all further accounts are

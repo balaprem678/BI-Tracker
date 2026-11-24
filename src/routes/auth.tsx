@@ -5,6 +5,7 @@ import { LayoutGrid, Shield, UserCheck, User, Sparkles, ArrowRight, AlertTriangl
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  DEFAULT_ADMIN_EMAIL,
   DEFAULT_ADMIN_PASSWORD,
   normalizeAdminIdentifier,
 } from "@/lib/bootstrap.functions";

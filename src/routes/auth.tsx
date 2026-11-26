@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import logo from "../../public/Images/logo.png"
 import {
   LayoutGrid,
   Shield,
@@ -165,7 +166,7 @@ function AuthPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="grid size-9 place-items-center rounded-md bg-blue-500 text-white font-bold">
-              <LayoutGrid className="size-4" />
+                  <img src={logo} alt="BI Tracker Logo" />
             </span>
             <span className="font-display text-lg font-semibold">BI Tracker</span>
           </div>

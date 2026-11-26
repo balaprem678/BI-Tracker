@@ -222,7 +222,6 @@ function Dashboard() {
     setIsAcquiringLocation(true);
     setLocationErrorModal(null);
     try {
-      toast.info("Verifying location...");
       const loc = await getCurrentLocation();
       setIsAcquiringLocation(false);
       clockMutation.mutate({

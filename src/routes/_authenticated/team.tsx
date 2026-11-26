@@ -38,6 +38,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { AppShell, Panel, Stat } from "@/components/app-shell";
+import { LocationAccuracyBadge } from "@/components/location-accuracy-badge";
 import { getSessionInfo, updateShiftLocation } from "@/lib/tracker.functions";
 import {
   getEmployeeAllData,
@@ -766,10 +767,20 @@ function TeamPage() {
                                       : "in progress"}
                                   </span>
                                   {s.clockInLocationName && (
-                                    <p className="text-[11px] text-foreground/80 flex items-center gap-1 font-medium mt-0.5">
-                                      📍 {s.clockInLocationName}
+                                    <p className="text-[11px] text-foreground/80 flex flex-wrap items-center gap-1.5 font-medium mt-0.5">
+                                      <span>📍 {s.clockInLocationName}</span>
+                                      <LocationAccuracyBadge
+                                        accuracy={s.clockInAccuracy}
+                                        locationName={s.clockInLocationName}
+                                      />
                                       {s.clockOutLocationName && s.clockOutLocationName !== s.clockInLocationName && (
-                                        <span className="text-muted-foreground font-normal"> (Out: {s.clockOutLocationName})</span>
+                                        <span className="text-muted-foreground font-normal inline-flex items-center gap-1">
+                                          (Out: {s.clockOutLocationName})
+                                          <LocationAccuracyBadge
+                                            accuracy={s.clockOutAccuracy}
+                                            locationName={s.clockOutLocationName}
+                                          />
+                                        </span>
                                       )}
                                     </p>
                                   )}
@@ -1444,7 +1455,13 @@ function EmployeeAllDataModal({
                                         In
                                       </span>
                                       {s.clockInLocationName ? (
-                                        <span>📍 {s.clockInLocationName}</span>
+                                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                                          <span>📍 {s.clockInLocationName}</span>
+                                          <LocationAccuracyBadge
+                                            accuracy={s.clockInAccuracy}
+                                            locationName={s.clockInLocationName}
+                                          />
+                                        </span>
                                       ) : (
                                         <span className="text-[11px] italic text-muted-foreground">Not recorded</span>
                                       )}
@@ -1466,7 +1483,13 @@ function EmployeeAllDataModal({
                                           Out
                                         </span>
                                         {s.clockOutLocationName ? (
-                                          <span>📍 {s.clockOutLocationName}</span>
+                                          <span className="inline-flex flex-wrap items-center gap-1.5">
+                                            <span>📍 {s.clockOutLocationName}</span>
+                                            <LocationAccuracyBadge
+                                              accuracy={s.clockOutAccuracy}
+                                              locationName={s.clockOutLocationName}
+                                            />
+                                          </span>
                                         ) : (
                                           <span className="text-[11px] italic text-muted-foreground">Not recorded</span>
                                         )}

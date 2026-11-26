@@ -127,6 +127,7 @@ const clockInInput = z.object({
   latitude: z.number({ required_error: "Location is required to Clock In" }),
   longitude: z.number({ required_error: "Location is required to Clock In" }),
   locationName: z.string().optional().default(""),
+  accuracy: z.number().optional(),
 });
 
 export const clockIn = createServerFn({ method: "POST" })
@@ -154,8 +155,16 @@ export const clockIn = createServerFn({ method: "POST" })
       clock_in_lng: data.longitude,
       clock_in_location_name: locName,
     };
+    if (typeof data.accuracy === "number") {
+      insertPayload.clock_in_accuracy = Math.round(data.accuracy);
+    }
 
     let { error } = await supabase.from("shifts").insert(insertPayload);
+    if (error && (error.message?.includes("clock_in_accuracy") || error.message?.includes("schema cache"))) {
+      delete insertPayload.clock_in_accuracy;
+      const retry = await supabase.from("shifts").insert(insertPayload);
+      error = retry.error;
+    }
     if (error && (error.message?.includes("clock_in_lat") || error.message?.includes("schema cache"))) {
       const fallback = await supabase.from("shifts").insert({
         user_id: userId,
@@ -173,6 +182,7 @@ const clockOutInput = z.object({
   latitude: z.number({ required_error: "Location is required to Clock Out" }),
   longitude: z.number({ required_error: "Location is required to Clock Out" }),
   locationName: z.string().optional().default(""),
+  accuracy: z.number().optional(),
   note: z.string().trim().max(500).optional(),
   endProjectSessionId: z.string().optional(),
   projectStatus: z.string().optional(),
@@ -202,12 +212,20 @@ export const clockOut = createServerFn({ method: "POST" })
       clock_out_location_name: locName,
       note: data.note ?? null,
     };
+    if (typeof data.accuracy === "number") {
+      updatePayload.clock_out_accuracy = Math.round(data.accuracy);
+    }
 
     let { error } = await supabase
       .from("shifts")
       .update(updatePayload)
       .eq("id", open.id);
 
+    if (error && (error.message?.includes("clock_out_accuracy") || error.message?.includes("schema cache"))) {
+      delete updatePayload.clock_out_accuracy;
+      const retry = await supabase.from("shifts").update(updatePayload).eq("id", open.id);
+      error = retry.error;
+    }
     if (error && (error.message?.includes("clock_out_lat") || error.message?.includes("schema cache"))) {
       const locOutText = `📍 Out: ${locName}`;
       const noteWithLoc = data.note ? `${data.note} (${locOutText})` : locOutText;

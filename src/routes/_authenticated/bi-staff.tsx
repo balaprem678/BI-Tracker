@@ -36,6 +36,7 @@ import {
   X,
 } from "lucide-react";
 import { AppShell, Panel, Stat } from "@/components/app-shell";
+import { LocationAccuracyBadge } from "@/components/location-accuracy-badge";
 import { getSessionInfo } from "@/lib/tracker.functions";
 import {
   getEmployeeAllData,
@@ -1193,9 +1194,13 @@ function EmployeeDetailsModal({
                           </span>
                           <span className="text-foreground">
                             {s.clockInLocationName ? (
-                              <span className="flex items-center gap-1">
+                              <span className="flex flex-wrap items-center gap-1.5">
                                 <MapPin className="size-3 text-emerald-500 shrink-0" />
-                                {s.clockInLocationName}
+                                <span>{s.clockInLocationName}</span>
+                                <LocationAccuracyBadge
+                                  accuracy={s.clockInAccuracy}
+                                  locationName={s.clockInLocationName}
+                                />
                               </span>
                             ) : (
                               <span className="italic text-muted-foreground/70">Not recorded</span>
@@ -1209,9 +1214,13 @@ function EmployeeDetailsModal({
                           </span>
                           <span className="text-foreground">
                             {s.clockOutLocationName ? (
-                              <span className="flex items-center gap-1">
+                              <span className="flex flex-wrap items-center gap-1.5">
                                 <MapPin className="size-3 text-amber-500 shrink-0" />
-                                {s.clockOutLocationName}
+                                <span>{s.clockOutLocationName}</span>
+                                <LocationAccuracyBadge
+                                  accuracy={s.clockOutAccuracy}
+                                  locationName={s.clockOutLocationName}
+                                />
                               </span>
                             ) : s.clockOut ? (
                               <span className="italic text-muted-foreground/70">Not recorded</span>

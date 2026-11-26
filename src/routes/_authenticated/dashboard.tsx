@@ -167,6 +167,7 @@ function Dashboard() {
       latitude?: number;
       longitude?: number;
       locationName?: string;
+      accuracy?: number;
       endProjectSessionId?: string;
       projectStatus?: string;
       taskSummary?: string;
@@ -177,6 +178,7 @@ function Dashboard() {
             latitude: payload.latitude,
             longitude: payload.longitude,
             locationName: payload.locationName,
+            accuracy: payload.accuracy,
           },
         });
       } else {
@@ -185,6 +187,7 @@ function Dashboard() {
             latitude: payload.latitude,
             longitude: payload.longitude,
             locationName: payload.locationName,
+            accuracy: payload.accuracy,
             endProjectSessionId: payload.endProjectSessionId,
             projectStatus: payload.projectStatus,
             taskSummary: payload.taskSummary,
@@ -224,11 +227,19 @@ function Dashboard() {
     try {
       const loc = await getCurrentLocation();
       setIsAcquiringLocation(false);
+      if (loc.isLowAccuracy || (loc.accuracy && loc.accuracy > 500)) {
+        const km = loc.accuracy ? `~${(loc.accuracy / 1000).toFixed(1)}km` : "low accuracy";
+        toast.warning(
+          `Low location accuracy (${km}). Laptops lack hardware GPS—connect to Wi-Fi or use a mobile phone for precise check-in.`,
+          { duration: 6000 },
+        );
+      }
       clockMutation.mutate({
         kind,
         latitude: loc.latitude,
         longitude: loc.longitude,
         locationName: loc.locationName,
+        accuracy: loc.accuracy,
         endProjectSessionId: projectDetails?.endProjectSessionId,
         projectStatus: projectDetails?.projectStatus,
         taskSummary: projectDetails?.taskSummary,

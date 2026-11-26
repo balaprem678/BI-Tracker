@@ -3,6 +3,8 @@ export type GeoLocationResult = {
   longitude: number;
   locationName: string;
   accuracy?: number;
+  isLowAccuracy?: boolean;
+  source?: "gps" | "ip";
 };
 
 const geocodeCache = new Map<string, string>();
@@ -96,9 +98,63 @@ function getPositionPromise(options: PositionOptions): Promise<GeolocationPositi
   });
 }
 
+export async function getIpLocationFallback(): Promise<GeoLocationResult> {
+  // Primary IP Geolocation: ipapi.co
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch("https://ipapi.co/json/", { signal: controller.signal });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json();
+      if (typeof data.latitude === "number" && typeof data.longitude === "number") {
+        const parts = [data.city, data.region, data.country_name].filter(Boolean);
+        const place = parts.length > 0 ? parts.join(", ") : "Desktop";
+        return {
+          latitude: Number(data.latitude.toFixed(6)),
+          longitude: Number(data.longitude.toFixed(6)),
+          locationName: `${place} · Verified via IP (Desktop)`,
+          accuracy: 10000,
+          isLowAccuracy: true,
+          source: "ip",
+        };
+      }
+    }
+  } catch {
+    // Fallback to secondary IP provider
+  }
+
+  // Secondary IP Geolocation: ipwho.is
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch("https://ipwho.is/", { signal: controller.signal });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success !== false && typeof data.latitude === "number" && typeof data.longitude === "number") {
+        const parts = [data.city, data.region, data.country].filter(Boolean);
+        const place = parts.length > 0 ? parts.join(", ") : "Desktop";
+        return {
+          latitude: Number(data.latitude.toFixed(6)),
+          longitude: Number(data.longitude.toFixed(6)),
+          locationName: `${place} · Verified via IP (Desktop)`,
+          accuracy: 10000,
+          isLowAccuracy: true,
+          source: "ip",
+        };
+      }
+    }
+  } catch {
+    // Both IP fallbacks failed
+  }
+
+  throw new Error("Could not retrieve device GPS or IP-based location. Please check your connection.");
+}
+
 export async function getCurrentLocation(): Promise<GeoLocationResult> {
   if (typeof navigator === "undefined" || !navigator.geolocation) {
-    throw new Error("Device GPS is not available. Enable location services to continue.");
+    return getIpLocationFallback();
   }
 
   let position: GeolocationPosition;
@@ -121,26 +177,31 @@ export async function getCurrentLocation(): Promise<GeoLocationResult> {
         maximumAge: 60000,
       });
     } catch (fallbackErr: any) {
-      let message = "Could not retrieve current GPS location.";
-      if (fallbackErr?.code === 1) {
-        message = "Location permission denied. Allow browser location access to clock in or out.";
-      } else if (fallbackErr?.code === 2) {
-        message = "Device GPS position is unavailable. Enable location services and try again.";
-      } else if (fallbackErr?.code === 3) {
-        message = "GPS request timed out. Please try clocking in or out again.";
+      if (fallbackErr?.code === 1 /* PERMISSION_DENIED */) {
+        throw new Error("Location permission denied. Allow browser location access to clock in or out.");
       }
-      throw new Error(message);
+      // Graceful IP-based fallback when desktop/browser geolocation fails or times out
+      console.warn("Browser geolocation failed or timed out; using IP-based fallback.");
+      return getIpLocationFallback();
     }
   }
 
   const latitude = Number(position.coords.latitude.toFixed(6));
   const longitude = Number(position.coords.longitude.toFixed(6));
+  const accuracy = Math.round(position.coords.accuracy || 0);
+
+  if (accuracy > 1500) {
+    console.warn(`Low accuracy detected: ${accuracy}m`);
+  }
+
   const locationName = await reverseGeocodeLocation(latitude, longitude);
 
   return {
     latitude,
     longitude,
     locationName,
-    accuracy: Math.round(position.coords.accuracy || 0),
+    accuracy,
+    isLowAccuracy: accuracy > 500,
+    source: "gps",
   };
 }

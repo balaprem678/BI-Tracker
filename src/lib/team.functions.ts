@@ -60,9 +60,11 @@ export type EmployeeShift = {
   clockInLat?: number | null;
   clockInLng?: number | null;
   clockInLocationName?: string | null;
+  clockInAccuracy?: number | null;
   clockOutLat?: number | null;
   clockOutLng?: number | null;
   clockOutLocationName?: string | null;
+  clockOutAccuracy?: number | null;
 };
 
 export type EmployeeHourlyLog = {
@@ -148,6 +150,8 @@ export type TeamHourlyReportRow = {
     note: string | null;
     clockInLocationName?: string | null;
     clockOutLocationName?: string | null;
+    clockInAccuracy?: number | null;
+    clockOutAccuracy?: number | null;
     clockInLat?: number | null;
     clockInLng?: number | null;
     clockOutLat?: number | null;
@@ -345,7 +349,7 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
     let shifts: any[] | null = null;
     const shiftRes = await context.supabase
       .from("shifts")
-      .select("id, clock_in, clock_out, note, clock_in_lat, clock_in_lng, clock_in_location_name, clock_out_lat, clock_out_lng, clock_out_location_name, created_at")
+      .select("id, clock_in, clock_out, note, clock_in_lat, clock_in_lng, clock_in_location_name, clock_in_accuracy, clock_out_lat, clock_out_lng, clock_out_location_name, clock_out_accuracy, created_at")
       .eq("user_id", employeeId)
       .order("clock_in", { ascending: false });
 
@@ -353,11 +357,20 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
       console.warn("Location shift select failed in getEmployeeAllData, executing fallback query:", shiftRes.error.message);
       const fallbackRes = await context.supabase
         .from("shifts")
-        .select("id, clock_in, clock_out, note, created_at")
+        .select("id, clock_in, clock_out, note, clock_in_lat, clock_in_lng, clock_in_location_name, clock_out_lat, clock_out_lng, clock_out_location_name, created_at")
         .eq("user_id", employeeId)
         .order("clock_in", { ascending: false });
-      if (fallbackRes.error) throw new Error(fallbackRes.error.message);
-      shifts = fallbackRes.data;
+      if (fallbackRes.error) {
+        const minRes = await context.supabase
+          .from("shifts")
+          .select("id, clock_in, clock_out, note, created_at")
+          .eq("user_id", employeeId)
+          .order("clock_in", { ascending: false });
+        if (minRes.error) throw new Error(minRes.error.message);
+        shifts = minRes.data;
+      } else {
+        shifts = fallbackRes.data;
+      }
     } else {
       shifts = shiftRes.data;
     }
@@ -414,9 +427,11 @@ export const getEmployeeAllData = createServerFn({ method: "GET" })
         clockInLat: s.clock_in_lat ?? null,
         clockInLng: s.clock_in_lng ?? null,
         clockInLocationName: clockInLoc,
+        clockInAccuracy: s.clock_in_accuracy ?? null,
         clockOutLat: s.clock_out_lat ?? null,
         clockOutLng: s.clock_out_lng ?? null,
         clockOutLocationName: clockOutLoc,
+        clockOutAccuracy: s.clock_out_accuracy ?? null,
       };
     });
 
@@ -562,7 +577,7 @@ export const getTeamHourlyReport = createServerFn({ method: "GET" })
     let shifts: any[] = [];
     const shiftRes = await context.supabase
       .from("shifts")
-      .select("user_id, clock_in, clock_out, note, clock_in_lat, clock_in_lng, clock_in_location_name, clock_out_lat, clock_out_lng, clock_out_location_name")
+      .select("user_id, clock_in, clock_out, note, clock_in_lat, clock_in_lng, clock_in_location_name, clock_in_accuracy, clock_out_lat, clock_out_lng, clock_out_location_name, clock_out_accuracy")
       .gte("clock_in", startIso)
       .lte("clock_in", endIso);
 
@@ -570,10 +585,19 @@ export const getTeamHourlyReport = createServerFn({ method: "GET" })
       console.warn("Location shift select failed in getTeamHourlyReport, executing fallback query:", shiftRes.error.message);
       const fallbackRes = await context.supabase
         .from("shifts")
-        .select("user_id, clock_in, clock_out, note")
+        .select("user_id, clock_in, clock_out, note, clock_in_lat, clock_in_lng, clock_in_location_name, clock_out_lat, clock_out_lng, clock_out_location_name")
         .gte("clock_in", startIso)
         .lte("clock_in", endIso);
-      shifts = fallbackRes.data ?? [];
+      if (fallbackRes.error) {
+        const minRes = await context.supabase
+          .from("shifts")
+          .select("user_id, clock_in, clock_out, note")
+          .gte("clock_in", startIso)
+          .lte("clock_in", endIso);
+        shifts = minRes.data ?? [];
+      } else {
+        shifts = fallbackRes.data ?? [];
+      }
     } else {
       shifts = shiftRes.data ?? [];
     }
@@ -645,6 +669,8 @@ export const getTeamHourlyReport = createServerFn({ method: "GET" })
               note: s.note ?? null,
               clockInLocationName: clockInLoc,
               clockOutLocationName: clockOutLoc,
+              clockInAccuracy: s.clock_in_accuracy ?? null,
+              clockOutAccuracy: s.clock_out_accuracy ?? null,
               clockInLat: s.clock_in_lat ?? null,
               clockInLng: s.clock_in_lng ?? null,
               clockOutLat: s.clock_out_lat ?? null,

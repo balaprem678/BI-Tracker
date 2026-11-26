@@ -1,14 +1,27 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { LayoutGrid, Shield, UserCheck, User, Sparkles, ArrowRight, AlertTriangle } from "lucide-react";
+import logo from "../../public/Images/logo.png"
+import {
+  LayoutGrid,
+  Shield,
+  UserCheck,
+  User,
+  Sparkles,
+  ArrowRight,
+  AlertTriangle,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import {
   DEFAULT_ADMIN_EMAIL,
   DEFAULT_ADMIN_PASSWORD,
   normalizeAdminIdentifier,
+  resolveLocalLoginUser,
 } from "@/lib/bootstrap.functions";
+import { syncLocalUser } from "@/integrations/supabase/local-db";
 
 const EMPLOYEE_EMAIL = "employee@bi-tracker.local";
 
@@ -70,10 +83,26 @@ function AuthPage() {
       const loginEmail = normalizedIdentifier || loginIdentifier;
       const finalPassword = loginPass || DEFAULT_ADMIN_PASSWORD;
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      let { data, error } = await supabase.auth.signInWithPassword({
         email: loginEmail,
         password: finalPassword,
       });
+
+      const isLocalhost =
+        typeof window !== "undefined" &&
+        (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+      if (error && isLocalhost) {
+        const localUser = await resolveLocalLoginUser({
+          data: { email: loginEmail, password: finalPassword },
+        });
+        if (localUser) {
+          syncLocalUser({ ...localUser, password: finalPassword });
+          ({ data, error } = await supabase.auth.signInWithPassword({
+            email: loginEmail,
+            password: finalPassword,
+          }));
+        }
+      }
 
       if (error || !data.session) {
         toast.error(error?.message || "Could not sign in.");
@@ -137,7 +166,7 @@ function AuthPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="grid size-9 place-items-center rounded-md bg-blue-500 text-white font-bold">
-              <LayoutGrid className="size-4" />
+                  <img src={logo} alt="BI Tracker Logo" />
             </span>
             <span className="font-display text-lg font-semibold">BI Tracker</span>
           </div>
@@ -212,17 +241,35 @@ function Field({
   type?: string;
   autoComplete?: string;
 }) {
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const isPassword = type === "password";
+
   return (
     <label className="block">
       <span className="text-xs uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
-      <input
-        required
-        type={type}
-        value={value}
-        autoComplete={autoComplete}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-blue-500"
-      />
+      <div className="relative mt-1.5">
+        <input
+          required
+          type={isPassword && !passwordVisible ? "password" : "text"}
+          value={value}
+          autoComplete={autoComplete}
+          onChange={(e) => onChange(e.target.value)}
+          className={`w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-blue-500 ${
+            isPassword ? "pr-10" : ""
+          }`}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            aria-label={passwordVisible ? "Hide password" : "Show password"}
+            aria-pressed={passwordVisible}
+            onClick={() => setPasswordVisible((visible) => !visible)}
+            className="absolute inset-y-0 right-0 grid w-10 place-items-center text-muted-foreground hover:text-foreground"
+          >
+            {passwordVisible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        )}
+      </div>
     </label>
   );
 }

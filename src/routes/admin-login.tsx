@@ -78,12 +78,22 @@ function AdminLoginPage() {
         return;
       }
 
-      // Check if user account is deactivated
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("is_active")
-        .eq("id", data.user.id)
-        .maybeSingle();
+      if (data.session?.access_token && typeof document !== "undefined") {
+        document.cookie = `sb-access-token=${encodeURIComponent(data.session.access_token)}; path=/; max-age=604800; SameSite=Lax`;
+      }
+
+      // Check profile active status and assigned role in parallel
+      const [{ data: profile }, { data: roleRow }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("is_active")
+          .eq("id", data.user.id)
+          .maybeSingle(),
+        supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", data.user.id),
+      ]);
 
       if (profile && (profile as any).is_active === false) {
         await supabase.auth.signOut();
@@ -93,17 +103,7 @@ function AdminLoginPage() {
         return;
       }
 
-      if (data.session?.access_token && typeof document !== "undefined") {
-        document.cookie = `sb-access-token=${encodeURIComponent(data.session.access_token)}; path=/; max-age=604800; SameSite=Lax`;
-      }
-
       toast.success(`Signed in as ${data.user?.user_metadata?.full_name || loginEmail}`);
-
-      // Query assigned role from user_roles table
-      const { data: roleRow } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", data.user.id);
 
       const hasAdminRole = (roleRow ?? []).some((r: any) => r.role === "admin");
       const hasSubAdminRole = (roleRow ?? []).some((r: any) => r.role === "sub_admin");

@@ -110,6 +110,9 @@ export type Shift = {
 export const getMyShifts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { autoCloseExpiredShiftsAndSessions } = await import("@/lib/auto-checkout.server");
+    await autoCloseExpiredShiftsAndSessions(context.supabase, context.userId);
+
     const { data, error } = await context.supabase
       .from("shifts")
       .select("*")
@@ -131,6 +134,9 @@ export const clockIn = createServerFn({ method: "POST" })
   .validator((input: z.input<typeof clockInInput>) => clockInInput.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const { autoCloseExpiredShiftsAndSessions } = await import("@/lib/auto-checkout.server");
+    await autoCloseExpiredShiftsAndSessions(supabase, userId);
+
     const { data: open } = await supabase
       .from("shifts")
       .select("id")
@@ -273,25 +279,27 @@ export const clockOut = createServerFn({ method: "POST" })
 
     const stoppedProjectNames: string[] = [];
     if (runningSessions.length > 0) {
-      for (const sess of runningSessions) {
-        const startMs = sess.start_time ? new Date(sess.start_time).getTime() : nowMs;
-        const elapsed = isNaN(startMs) ? 0 : Math.max(0, Math.floor((nowMs - startMs) / 1000));
-        const updatedDuration = (sess.duration_seconds || 0) + elapsed;
+      await Promise.all(
+        runningSessions.map(async (sess: any) => {
+          const startMs = sess.start_time ? new Date(sess.start_time).getTime() : nowMs;
+          const elapsed = isNaN(startMs) ? 0 : Math.max(0, Math.floor((nowMs - startMs) / 1000));
+          const updatedDuration = (sess.duration_seconds || 0) + elapsed;
 
-        await supabase
-          .from("project_sessions")
-          .update({
-            end_time: nowIso,
-            duration_seconds: updatedDuration,
-            status: "Paused",
-            updated_at: nowIso,
-          })
-          .eq("id", sess.id);
+          await supabase
+            .from("project_sessions")
+            .update({
+              end_time: nowIso,
+              duration_seconds: updatedDuration,
+              status: "Paused",
+              updated_at: nowIso,
+            })
+            .eq("id", sess.id);
 
-        if (sess.project_name) {
-          stoppedProjectNames.push(sess.project_name);
-        }
-      }
+          if (sess.project_name) {
+            stoppedProjectNames.push(sess.project_name);
+          }
+        }),
+      );
     }
 
     const message = endedProjectName
@@ -307,7 +315,12 @@ export const getShiftAnalyticsToday = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    const today = new Date().toISOString().split("T")[0];
+    const { autoCloseExpiredShiftsAndSessions, getIstDateString } = await import(
+      "@/lib/auto-checkout.server"
+    );
+    await autoCloseExpiredShiftsAndSessions(supabase, userId);
+
+    const today = getIstDateString();
 
     const [{ data: shifts }, { data: sessions }] = await Promise.all([
       supabase

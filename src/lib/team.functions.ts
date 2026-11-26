@@ -179,9 +179,13 @@ export const getTeamMembers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<TeamMember[]> => {
     await assertAdmin(context);
+    const { autoCloseExpiredShiftsAndSessions, getIstDateString } = await import(
+      "@/lib/auto-checkout.server"
+    );
+    await autoCloseExpiredShiftsAndSessions(context.supabase);
 
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const startOfTodayIso = new Date(`${todayStr}T00:00:00`).toISOString();
+    const todayStr = getIstDateString();
+    const startOfTodayIso = new Date(`${todayStr}T00:00:00+05:30`).toISOString();
 
     const [
       { data: profiles, error: pError },
@@ -531,6 +535,8 @@ export const getTeamHourlyReport = createServerFn({ method: "GET" })
   .inputValidator((input: z.input<typeof reportInput>) => reportInput.parse(input))
   .handler(async ({ data, context }): Promise<TeamHourlyReportRow[]> => {
     await assertAdmin(context);
+    const { autoCloseExpiredShiftsAndSessions } = await import("@/lib/auto-checkout.server");
+    await autoCloseExpiredShiftsAndSessions(context.supabase);
 
     const startIso = new Date(`${data.from}T00:00:00`).toISOString();
     const endIso = new Date(`${data.to}T23:59:59`).toISOString();
